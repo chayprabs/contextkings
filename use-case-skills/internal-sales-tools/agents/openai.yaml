@@ -1,0 +1,4 @@
+interface:
+  display_name: "Internal Sales Tools"
+  short_description: "Sales ops and rep workspace workflows"
+  default_prompt: "Use $internal-sales-tools to shape a rep-facing or ops-facing sales workflow into a valid ContextKings run."

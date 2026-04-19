@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enrich Leads"
+  short_description: "Lead enrichment and scoring workflows"
+  default_prompt: "Use $enrich-leads to enrich a known list of companies or people and return a review-ready table."

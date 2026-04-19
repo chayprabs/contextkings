@@ -1,0 +1,4 @@
+interface:
+  display_name: "Power Your Recruiting Platform"
+  short_description: "Recruiting and candidate intelligence flows"
+  default_prompt: "Use $power-your-recruiting-platform to turn a hiring prompt into a supported candidate search or enrich workflow."

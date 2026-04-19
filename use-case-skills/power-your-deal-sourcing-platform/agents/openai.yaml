@@ -1,0 +1,4 @@
+interface:
+  display_name: "Power Your Deal Sourcing Platform"
+  short_description: "Deal sourcing and target discovery flows"
+  default_prompt: "Use $power-your-deal-sourcing-platform to map a sourcing thesis into a valid company search and ranking workflow."

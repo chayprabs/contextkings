@@ -1,0 +1,4 @@
+interface:
+  display_name: "Track Champions"
+  short_description: "Champion scoring and stakeholder review"
+  default_prompt: "Use $track-champions to build a supported champion-identification workflow from contacts, titles, or account lists."

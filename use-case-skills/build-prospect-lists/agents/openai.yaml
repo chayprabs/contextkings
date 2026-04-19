@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Prospect Lists"
+  short_description: "Prospecting list generation and ranking"
+  default_prompt: "Use $build-prospect-lists to convert targeting criteria into an export-ready prospect list workflow."

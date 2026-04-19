@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Candidate Lists"
+  short_description: "Candidate shortlist generation and ranking"
+  default_prompt: "Use $build-candidate-lists to turn role criteria into a supported candidate list workflow."

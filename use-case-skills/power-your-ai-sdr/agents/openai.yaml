@@ -1,0 +1,4 @@
+interface:
+  display_name: "Power Your AI SDR"
+  short_description: "Outbound prospecting and SDR workflows"
+  default_prompt: "Use $power-your-ai-sdr to turn an outbound idea into a constrained CrustData prospecting workflow and dashboard."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Internal Sales Tools"
+  short_description: "Generated internal sales workspace planning"
+  default_prompt: "Use $build-internal-sales-tools to shape a reusable internal sales app around supported ContextKings workflows."

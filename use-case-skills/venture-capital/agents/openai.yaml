@@ -1,0 +1,4 @@
+interface:
+  display_name: "Venture Capital"
+  short_description: "VC sourcing and startup research workflows"
+  default_prompt: "Use $venture-capital to convert an investor thesis into a constrained startup sourcing workflow and report."

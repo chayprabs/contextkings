@@ -1,0 +1,4 @@
+interface:
+  display_name: "Monitor Companies For Signals"
+  short_description: "Watchlist signal extraction workflows"
+  default_prompt: "Use $monitor-companies-for-signals to turn a company watchlist into a repeatable signal monitoring workflow."
