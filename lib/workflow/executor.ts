@@ -431,27 +431,39 @@ function buildMockRecords(spec: ValidatedWorkflowSpec, threadState: ThreadState)
       : spec.inputs.manualEntries.length > 0
         ? spec.inputs.manualEntries
         : threadState.sourceContext?.records.flatMap((row) => Object.values(row)).slice(0, spec.inputs.limit) ?? [];
-
+  const mockSourceHint = buildMockSourceHint(spec.sourceHints[0]);
+  const usesSyntheticSeeds = seedValues.length === 0;
   const base = seedValues.length > 0
     ? seedValues
-    : Array.from({ length: spec.inputs.limit }, (_, index) => `${spec.entityType}-${index + 1}`);
+    : Array.from({ length: spec.inputs.limit }, (_, index) => `synthetic-${spec.entityType}-${index + 1}`);
 
   if (spec.entityType === "person") {
     return normalizePeople(
       base.slice(0, spec.inputs.limit).map((value, index) => ({
-        matched_on: value,
+        matched_on: usesSyntheticSeeds
+          ? buildSyntheticPersonName(index)
+          : value,
         person_data: {
           basic_profile: {
-            name: buildMockPersonName(value, index),
+            name: usesSyntheticSeeds
+              ? buildSyntheticPersonName(index)
+              : buildMockPersonName(value, index),
             headline: index % 2 === 0 ? "Senior Growth Lead" : "Head of Revenue",
             location: index % 2 === 0 ? "Bengaluru, India" : "San Francisco, USA",
           },
-          professional_network_profile_url: `https://www.linkedin.com/in/mock-person-${index + 1}`,
-          business_email: `mock-person-${index + 1}@example.com`,
+          professional_network_profile_url: `https://linkedin.example/in/${slugifyLabel(
+            usesSyntheticSeeds ? buildSyntheticPersonName(index) : buildMockPersonName(value, index),
+          )}`,
+          business_email: `${slugifyLabel(
+            usesSyntheticSeeds ? buildSyntheticPersonName(index) : buildMockPersonName(value, index),
+          )}@example.com`,
           experience: {
             employment_details: {
               current: {
-                company_name: `Company ${index + 1}`,
+                company_name: buildSyntheticCompanyName(
+                  readCompanyMockContext(spec.inputs.filters),
+                  index,
+                ),
                 title: index % 2 === 0 ? "Senior Growth Lead" : "Head of Revenue",
               },
             },
@@ -460,37 +472,53 @@ function buildMockRecords(spec: ValidatedWorkflowSpec, threadState: ThreadState)
       })),
     ).map((record) => ({
       ...record,
-      sourceHint: spec.sourceHints[0] ?? "mock-source",
+      sourceHint: mockSourceHint,
     }));
   }
 
+  const companyMockContext = readCompanyMockContext(spec.inputs.filters);
+
   return normalizeCompanies(
     base.slice(0, spec.inputs.limit).map((value, index) => ({
-      matched_on: value,
+      matched_on: usesSyntheticSeeds
+        ? buildSyntheticCompanyName(companyMockContext, index)
+        : value,
       company_data: {
         basic_info: {
-          name: buildMockCompanyName(value, index),
-          primary_domain: value.includes(".") ? value : `sample${index + 1}.com`,
-          professional_network_url: `https://www.linkedin.com/company/mock-company-${index + 1}`,
+          name: usesSyntheticSeeds
+            ? buildSyntheticCompanyName(companyMockContext, index)
+            : buildMockCompanyName(value, index),
+          primary_domain: buildMockCompanyDomain(
+            usesSyntheticSeeds
+              ? buildSyntheticCompanyName(companyMockContext, index)
+              : buildMockCompanyName(value, index),
+            value,
+          ),
+          professional_network_url: `https://linkedin.example/company/${slugifyLabel(
+            usesSyntheticSeeds
+              ? buildSyntheticCompanyName(companyMockContext, index)
+              : buildMockCompanyName(value, index),
+          )}`,
         },
         taxonomy: {
-          professional_network_industry: index % 2 === 0 ? "Software" : "Financial Services",
+          professional_network_industry:
+            companyMockContext.industry ??
+            (index % 2 === 0 ? "Software" : "Financial Services"),
         },
         headcount: { total: 50 + index * 25 },
         funding: {
           total_investment_usd: 2_000_000 + index * 1_250_000,
-          last_round_type: index % 3 === 0 ? "Seed" : index % 3 === 1 ? "Series A" : "Series B",
+          last_round_type:
+            companyMockContext.fundingStage ??
+            (index % 3 === 0 ? "Seed" : index % 3 === 1 ? "Series A" : "Series B"),
         },
         hiring: { openings_count: 2 + index * 2 },
-        locations: {
-          headquarters: index % 2 === 0 ? "Bengaluru, Karnataka, India" : "New York, New York, USA",
-          hq_country: index % 2 === 0 ? "India" : "USA",
-        },
+        locations: buildMockCompanyLocation(companyMockContext, index),
       },
     })),
   ).map((record) => ({
     ...record,
-    sourceHint: spec.sourceHints[0] ?? "mock-source",
+    sourceHint: mockSourceHint,
   }));
 }
 
@@ -761,6 +789,157 @@ function buildPersonLocation(
   const country = firstString(basicProfile?.country, current?.country, contact?.country);
 
   return [city, region, country].filter(Boolean).join(", ") || null;
+}
+
+function readCompanyMockContext(filters?: FilterCondition | FilterGroup) {
+  const conditions = flattenFilterConditions(filters);
+
+  return {
+    industry: readStringFilterValue(
+      conditions,
+      "taxonomy.professional_network_industry",
+    ),
+    fundingStage: readStringFilterValue(conditions, "funding.last_round_type"),
+    hqCountry:
+      readStringFilterValue(conditions, "hq_country") ??
+      readStringFilterValue(conditions, "locations.hq_country"),
+  };
+}
+
+function flattenFilterConditions(
+  filters?: FilterCondition | FilterGroup,
+): FilterCondition[] {
+  if (!filters) {
+    return [];
+  }
+
+  if ("field" in filters) {
+    return [filters];
+  }
+
+  return filters.conditions.flatMap((condition) =>
+    flattenFilterConditions(condition),
+  );
+}
+
+function readStringFilterValue(
+  conditions: FilterCondition[],
+  field: string,
+) {
+  const match = conditions.find((condition) => condition.field === field);
+  if (!match) {
+    return null;
+  }
+
+  return typeof match.value === "string" ? match.value : null;
+}
+
+function buildMockSourceHint(sourceHint?: string) {
+  if (!sourceHint) {
+    return "mock dataset";
+  }
+
+  return sourceHint.toLowerCase().includes("mock")
+    ? sourceHint
+    : `${sourceHint} (mock)`;
+}
+
+function buildSyntheticCompanyName(
+  context: {
+    industry: string | null;
+    fundingStage: string | null;
+    hqCountry: string | null;
+  },
+  index: number,
+) {
+  const pool = selectCompanySuffixPool(context.industry);
+  const prefix = MOCK_COMPANY_PREFIXES[index % MOCK_COMPANY_PREFIXES.length];
+  const suffix = pool[Math.floor(index / MOCK_COMPANY_PREFIXES.length) % pool.length];
+  const qualifier = buildMockCompanyQualifier(context, index);
+
+  return [prefix, suffix, qualifier].filter(Boolean).join(" ");
+}
+
+function buildSyntheticPersonName(index: number) {
+  const first = MOCK_PERSON_FIRST_NAMES[index % MOCK_PERSON_FIRST_NAMES.length];
+  const last =
+    MOCK_PERSON_LAST_NAMES[Math.floor(index / MOCK_PERSON_FIRST_NAMES.length) % MOCK_PERSON_LAST_NAMES.length];
+
+  return `${first} ${last}`;
+}
+
+function buildMockCompanyQualifier(
+  context: {
+    industry: string | null;
+    fundingStage: string | null;
+    hqCountry: string | null;
+  },
+  index: number,
+) {
+  const labels = [
+    context.hqCountry ? MOCK_COUNTRY_LABELS[context.hqCountry] ?? null : null,
+    context.fundingStage && index >= MOCK_COMPANY_PREFIXES.length
+      ? context.fundingStage.replace(/\s+/g, "")
+      : null,
+  ].filter(Boolean);
+
+  return labels.join(" ");
+}
+
+function selectCompanySuffixPool(industry: string | null) {
+  switch ((industry ?? "").toLowerCase()) {
+    case "financial services":
+      return MOCK_COMPANY_SUFFIXES.financialServices;
+    case "artificial intelligence":
+      return MOCK_COMPANY_SUFFIXES.artificialIntelligence;
+    case "hospital & health care":
+      return MOCK_COMPANY_SUFFIXES.healthcare;
+    case "retail":
+      return MOCK_COMPANY_SUFFIXES.retail;
+    case "software":
+    case "information technology & services":
+      return MOCK_COMPANY_SUFFIXES.software;
+    default:
+      return MOCK_COMPANY_SUFFIXES.default;
+  }
+}
+
+function buildMockCompanyDomain(name: string, fallbackValue: string) {
+  if (fallbackValue.includes(".")) {
+    return fallbackValue
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "")
+      .toLowerCase();
+  }
+
+  return `${slugifyLabel(name)}.example`;
+}
+
+function buildMockCompanyLocation(
+  context: {
+    industry: string | null;
+    fundingStage: string | null;
+    hqCountry: string | null;
+  },
+  index: number,
+) {
+  const locationByCountry = context.hqCountry
+    ? MOCK_HQ_LOCATIONS[context.hqCountry]
+    : null;
+
+  if (locationByCountry) {
+    return locationByCountry;
+  }
+
+  return index % 2 === 0
+    ? {
+        headquarters: "Bengaluru, Karnataka, India",
+        hq_country: "India",
+      }
+    : {
+        headquarters: "New York, New York, USA",
+        hq_country: "USA",
+      };
 }
 
 function buildMockCompanyName(value: string, index: number) {
@@ -1128,6 +1307,14 @@ function titleize(value: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function slugifyLabel(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "mock-record";
+}
+
 function asRecord(value: unknown) {
   return value && typeof value === "object" ? (value as UnknownRecord) : null;
 }
@@ -1208,3 +1395,128 @@ function shouldUseSearchFallback(spec: ValidatedWorkflowSpec) {
     spec.inputs.manualEntries.length === 0
   );
 }
+
+const MOCK_COMPANY_PREFIXES = [
+  "Northstar",
+  "Signal",
+  "Summit",
+  "Cinder",
+  "Harbor",
+  "Atlas",
+  "Meridian",
+  "Brightpath",
+] as const;
+
+const MOCK_COMPANY_SUFFIXES = {
+  default: [
+    "Works",
+    "Collective",
+    "Labs",
+    "Group",
+    "Studio",
+    "Partners",
+  ],
+  software: [
+    "Stack",
+    "Forge",
+    "Cloud",
+    "Systems",
+    "Flow",
+    "Works",
+  ],
+  financialServices: [
+    "Ledger",
+    "Capital",
+    "Treasury",
+    "Pay",
+    "Vault",
+    "Finance",
+  ],
+  artificialIntelligence: [
+    "Intelligence",
+    "Neural",
+    "Compute",
+    "Labs",
+    "Vector",
+    "Signals",
+  ],
+  healthcare: [
+    "Health",
+    "Care",
+    "Bio",
+    "Med",
+    "Clinic",
+    "Wellness",
+  ],
+  retail: [
+    "Commerce",
+    "Market",
+    "Supply",
+    "Retail",
+    "Cart",
+    "Merch",
+  ],
+} as const;
+
+const MOCK_PERSON_FIRST_NAMES = [
+  "Avery",
+  "Jordan",
+  "Riley",
+  "Taylor",
+  "Morgan",
+  "Casey",
+  "Parker",
+  "Quinn",
+] as const;
+
+const MOCK_PERSON_LAST_NAMES = [
+  "Shaw",
+  "Patel",
+  "Kim",
+  "Reed",
+  "Flores",
+  "Singh",
+  "Cole",
+  "Nguyen",
+] as const;
+
+const MOCK_HQ_LOCATIONS: Record<string, { headquarters: string; hq_country: string }> = {
+  India: {
+    headquarters: "Bengaluru, Karnataka, India",
+    hq_country: "India",
+  },
+  USA: {
+    headquarters: "New York, New York, USA",
+    hq_country: "USA",
+  },
+  "United Kingdom": {
+    headquarters: "London, England, United Kingdom",
+    hq_country: "United Kingdom",
+  },
+  Canada: {
+    headquarters: "Toronto, Ontario, Canada",
+    hq_country: "Canada",
+  },
+  Singapore: {
+    headquarters: "Singapore",
+    hq_country: "Singapore",
+  },
+  Europe: {
+    headquarters: "Berlin, Germany",
+    hq_country: "Europe",
+  },
+  "United Arab Emirates": {
+    headquarters: "Dubai, United Arab Emirates",
+    hq_country: "United Arab Emirates",
+  },
+};
+
+const MOCK_COUNTRY_LABELS: Record<string, string> = {
+  India: "India",
+  USA: "US",
+  "United Kingdom": "UK",
+  Canada: "CA",
+  Singapore: "SG",
+  Europe: "EU",
+  "United Arab Emirates": "UAE",
+};

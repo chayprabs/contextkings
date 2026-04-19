@@ -161,7 +161,7 @@ export function ResultsScreen(props: ResultsScreenProps) {
         </div>
       ) : null}
 
-      <div className="relative flex-1 overflow-auto pb-28">
+      <div className="relative flex-1 overflow-auto pb-40 md:pb-36">
         <div className="app-frame px-6 py-6 md:px-8">
           <RunDashboardCanvas run={run} />
         </div>
@@ -192,7 +192,7 @@ export function ResultsScreen(props: ResultsScreenProps) {
                 placeholder={
                   isRefining
                     ? "Updating results..."
-                    : 'Refine results — e.g. "only Series B companies"'
+                    : 'Refine results - e.g. "only Series B companies"'
                 }
                 value={refineInput}
               />
@@ -275,7 +275,7 @@ function PipelinePanel({
                 Pipeline details
               </div>
               <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                {steps.length} steps · all completed
+                {steps.length} steps - all completed
               </div>
             </div>
             <button

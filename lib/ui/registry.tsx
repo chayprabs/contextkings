@@ -71,12 +71,20 @@ type AnalyticsDeckProps = {
 type GridVariant = "split" | "triptych";
 
 const donutPalette = [
-  "#f0cd73",
-  "#6fd3c8",
-  "#8ca7ff",
-  "#f59e8b",
-  "#d8c4ff",
+  "#fafafa",
+  "#a1a1aa",
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
 ];
+
+const panelClass =
+  "rounded-[16px] border border-white/[0.08] bg-[#080808] shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_18px_48px_rgba(0,0,0,0.28)]";
+const mutedPanelClass =
+  "rounded-[14px] border border-white/[0.07] bg-white/[0.025] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]";
+const metricPanelClass =
+  "rounded-[14px] border border-white/[0.08] bg-[#0b0b0b] shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_12px_28px_rgba(0,0,0,0.18)]";
+const labelClass = "font-mono text-[11px] uppercase tracking-[0.22em] text-white/45";
 
 export const registry: ComponentRegistry = {
   Stack: ({ children, element }) => {
@@ -93,22 +101,22 @@ export const registry: ComponentRegistry = {
     const variant = (element.props.variant as GridVariant | undefined) ?? "split";
     const layout =
       variant === "triptych"
-        ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-        : "grid gap-4 xl:grid-cols-2";
+        ? "grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
+        : "grid items-start gap-4 xl:grid-cols-2";
 
     return <div className={layout}>{children}</div>;
   },
   Header: ({ element }) => (
-    <div className="soft-panel space-y-3 rounded-[30px] px-6 py-7 md:px-7 md:py-8">
+    <div className={`${panelClass} space-y-3 px-5 py-5 md:px-6 md:py-6`}>
       {element.props.eyebrow ? (
-        <div className="thin-label text-[#d9d4cb]">{element.props.eyebrow}</div>
+        <div className={labelClass}>{element.props.eyebrow}</div>
       ) : null}
       <div>
-        <h2 className="text-[2rem] font-semibold tracking-[-0.06em] text-[var(--panel-ink)] md:text-[2.45rem]">
+        <h2 className="text-[1.8rem] font-semibold tracking-[-0.05em] text-white md:text-[2.2rem]">
           {element.props.title}
         </h2>
         {element.props.description ? (
-          <p className="mt-2 text-base leading-7 text-[rgba(21,19,17,0.58)]">
+          <p className="mt-2 max-w-3xl text-base leading-7 text-white/58">
             {element.props.description}
           </p>
         ) : null}
@@ -118,30 +126,32 @@ export const registry: ComponentRegistry = {
   Notice: ({ element }) => {
     const toneClass =
       element.props.tone === "warning"
-        ? "border-[rgba(201,156,47,0.5)] bg-[var(--warning-soft)]"
+        ? "border-amber-400/30 bg-amber-400/10"
         : element.props.tone === "danger"
-          ? "border-red-200 bg-red-50"
-          : "border-[var(--line)] bg-[var(--panel)]";
+          ? "border-red-400/30 bg-red-400/10"
+          : "border-white/[0.08] bg-[rgba(255,255,255,0.02)]";
 
     return (
-      <div className={`rounded-[26px] border px-5 py-5 text-[var(--panel-ink)] ${toneClass}`}>
-        <div className="text-lg font-semibold tracking-[-0.03em]">
+      <div
+        className={`rounded-[14px] border px-5 py-4 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] ${toneClass}`}
+      >
+        <div className="text-base font-semibold tracking-[-0.02em]">
           {element.props.title}
         </div>
-        <p className="mt-2 text-base leading-7 text-[rgba(21,19,17,0.62)]">
+        <p className="mt-2 text-sm leading-6 text-white/62">
           {element.props.body}
         </p>
       </div>
     );
   },
   SectionCard: ({ children, element }) => (
-    <section className="soft-panel rounded-[30px] px-6 py-6 md:px-7">
+    <section className={`${panelClass} px-5 py-5 md:px-6`}>
       <div className="mb-5">
-        <h3 className="text-[1.75rem] font-semibold tracking-[-0.05em] text-[var(--panel-ink)]">
+        <h3 className="text-[1.35rem] font-semibold tracking-[-0.04em] text-white">
           {element.props.title}
         </h3>
         {element.props.description ? (
-          <p className="mt-2 max-w-3xl text-base leading-7 text-[rgba(21,19,17,0.58)]">
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">
             {element.props.description}
           </p>
         ) : null}
@@ -163,14 +173,14 @@ export const registry: ComponentRegistry = {
         {items.map((item, index) => (
           <article
             key={`${item.label}-${index}`}
-            className="metric-dark-card rounded-[26px] px-5 py-5 text-[var(--foreground)]"
+            className={`${metricPanelClass} px-4 py-4 text-white`}
           >
-            <div className="thin-label text-[var(--accent)]">{item.label}</div>
-            <div className="mt-4 text-5xl font-semibold tracking-[-0.08em] text-[var(--foreground)]">
+            <div className={labelClass}>{item.label}</div>
+            <div className="mt-3 text-[2.1rem] font-semibold tracking-[-0.06em] text-white">
               {item.value}
             </div>
             {item.hint ? (
-              <div className="mt-3 text-sm text-[var(--muted-foreground)]">
+              <div className="mt-2 text-sm leading-6 text-white/55">
                 {item.hint}
               </div>
             ) : null}
@@ -187,22 +197,22 @@ export const registry: ComponentRegistry = {
             <span
               className={`mt-2 h-3.5 w-3.5 rounded-full ${
                 step.status === "done"
-                  ? "bg-[var(--accent)]"
+                  ? "bg-white"
                   : step.status === "warning"
                     ? "bg-amber-500"
-                    : "bg-[var(--panel-ink)]"
+                    : "bg-blue-400"
               }`}
             />
             {index < element.props.steps.length - 1 ? (
-              <span className="mt-2 h-full w-px bg-[rgba(21,19,17,0.12)]" />
+              <span className="mt-2 h-full w-px bg-white/10" />
             ) : null}
           </div>
           <div className="pb-4">
-            <div className="text-base font-semibold text-[var(--panel-ink)]">
+            <div className="text-sm font-semibold text-white">
               {step.label}
             </div>
             {step.description ? (
-              <div className="mt-1 text-base leading-7 text-[rgba(21,19,17,0.58)]">
+              <div className="mt-1 text-sm leading-6 text-white/58">
                 {step.description}
               </div>
             ) : null}
@@ -214,15 +224,13 @@ export const registry: ComponentRegistry = {
   TagBar: ({ element }) => (
     <div className="space-y-3">
       {element.props.title ? (
-        <div className="thin-label text-[rgba(21,19,17,0.54)]">
-          {element.props.title}
-        </div>
+        <div className={labelClass}>{element.props.title}</div>
       ) : null}
       <div className="flex flex-wrap gap-2">
         {(element.props.tags as string[]).map((tag, index) => (
           <span
             key={`${tag}-${index}`}
-            className="rounded-full border border-[var(--line)] bg-[rgba(21,19,17,0.04)] px-3 py-1.5 text-sm text-[var(--panel-ink)]"
+            className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/72"
           >
             {tag}
           </span>
@@ -232,23 +240,25 @@ export const registry: ComponentRegistry = {
   ),
   RankedList: ({ element }) => (
     <div className="space-y-3">
-      <div className="text-base font-semibold text-[var(--panel-ink)]">
+      <div className="text-sm font-semibold text-white">
         {element.props.title}
       </div>
       <div className="space-y-3">
         {(element.props.items as RankedItem[]).map((item, index) => (
           <div
             key={`${item.label}-${index}`}
-            className="soft-panel-muted rounded-[22px] px-4 py-4"
+            className={`${mutedPanelClass} px-4 py-3`}
           >
             <div className="flex items-center justify-between gap-4">
-              <div className="font-medium text-[var(--panel-ink)]">{item.label}</div>
+              <div className="font-medium text-white">{item.label}</div>
               {item.value ? (
-                <div className="text-sm text-[rgba(21,19,17,0.54)]">{item.value}</div>
+                <div className="font-mono text-xs uppercase tracking-[0.16em] text-white/48">
+                  {item.value}
+                </div>
               ) : null}
             </div>
             {item.description ? (
-              <div className="mt-1 text-sm leading-6 text-[rgba(21,19,17,0.58)]">
+              <div className="mt-1 text-sm leading-6 text-white/58">
                 {item.description}
               </div>
             ) : null}
@@ -258,25 +268,25 @@ export const registry: ComponentRegistry = {
     </div>
   ),
   RecordTable: ({ element }) => (
-    <div className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[rgba(255,255,255,0.38)]">
-      <div className="border-b border-[var(--line)] bg-[rgba(255,255,255,0.48)] px-4 py-4">
-        <div className="text-base font-semibold text-[var(--panel-ink)]">
+    <div className="overflow-hidden rounded-[16px] border border-white/[0.08] bg-[rgba(255,255,255,0.02)] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]">
+      <div className="border-b border-white/[0.08] bg-white/[0.02] px-4 py-4">
+        <div className="text-sm font-semibold text-white">
           {element.props.title}
         </div>
         {element.props.caption ? (
-          <div className="mt-1 text-sm text-[rgba(21,19,17,0.58)]">
+          <div className="mt-1 text-sm text-white/55">
             {element.props.caption}
           </div>
         ) : null}
       </div>
-      <div className="overflow-x-auto bg-[rgba(255,255,255,0.12)]">
-        <table className="min-w-full text-left text-sm text-[var(--panel-ink)]">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm text-white">
           <thead>
-            <tr className="border-b border-[var(--line)]">
+            <tr className="border-b border-white/[0.08]">
               {(element.props.columns as string[]).map((column) => (
                 <th
                   key={column}
-                  className="px-4 py-3 font-medium text-[rgba(21,19,17,0.5)]"
+                  className="px-4 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-white/42"
                 >
                   {column}
                 </th>
@@ -287,12 +297,12 @@ export const registry: ComponentRegistry = {
             {(element.props.rows as string[][]).map((row, rowIndex) => (
               <tr
                 key={rowIndex}
-                className="border-b border-[var(--line)] last:border-b-0"
+                className="border-b border-white/[0.06] last:border-b-0"
               >
                 {row.map((cell, cellIndex) => (
                   <td
                     key={`${rowIndex}-${cellIndex}`}
-                    className="px-4 py-3 align-top"
+                    className="px-4 py-3 align-top text-white/72"
                   >
                     {cell}
                   </td>
@@ -305,20 +315,18 @@ export const registry: ComponentRegistry = {
     </div>
   ),
   EntityDetail: ({ element }) => (
-    <div className="soft-panel-muted rounded-[24px] px-4 py-4">
-      <div className="text-base font-semibold text-[var(--panel-ink)]">
+    <div className={`${panelClass} px-5 py-5 md:px-6`}>
+      <div className="text-[1.35rem] font-semibold tracking-[-0.04em] text-white">
         {element.props.title}
       </div>
-      <dl className="mt-3 grid gap-3 md:grid-cols-2">
+      <dl className="mt-5 grid gap-3 md:grid-cols-2">
         {(element.props.fields as DetailField[]).map((field, index) => (
           <div
             key={`${field.label}-${index}`}
-            className="rounded-[18px] bg-[rgba(255,255,255,0.58)] px-3 py-3"
+            className={`${mutedPanelClass} px-3 py-3`}
           >
-            <dt className="thin-label text-[rgba(21,19,17,0.44)]">
-              {field.label}
-            </dt>
-            <dd className="mt-2 text-sm leading-6 text-[var(--panel-ink)]">
+            <dt className={labelClass}>{field.label}</dt>
+            <dd className="mt-2 text-sm leading-6 text-white/72">
               {field.value}
             </dd>
           </div>
@@ -332,22 +340,26 @@ export const registry: ComponentRegistry = {
 
     return (
       <div className="space-y-3">
-        <div className="text-base font-semibold text-[var(--panel-ink)]">
+        <div className="text-sm font-semibold text-white">
           {element.props.title}
         </div>
         <div className="space-y-3">
           {data.map((item, index) => (
             <div key={`${item.label}-${index}`} className="space-y-1.5">
-              <div className="flex items-center justify-between gap-4 text-sm text-[var(--panel-ink)]">
+              <div className="flex items-center justify-between gap-4 text-sm text-white/74">
                 <span>{item.label}</span>
-                <span className="text-[rgba(21,19,17,0.54)]">
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/42">
                   {formatCompactNumber(item.value)}
                 </span>
               </div>
-              <div className="h-2.5 rounded-full bg-[rgba(21,19,17,0.08)]">
+              <div className="h-2 rounded-full bg-white/8">
                 <div
                   className="h-full rounded-full bg-[var(--accent)]"
-                  style={{ width: `${Math.max(8, (item.value / highest) * 100)}%` }}
+                  style={{
+                    width: `${Math.max(8, (item.value / highest) * 100)}%`,
+                    background:
+                      "linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0.42))",
+                  }}
                 />
               </div>
             </div>
@@ -375,36 +387,38 @@ export const registry: ComponentRegistry = {
     );
 
     return (
-      <section className="space-y-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="thin-label text-[var(--accent)]">Visual analytics</div>
-            <h2 className="mt-3 text-[2.35rem] font-semibold tracking-[-0.07em] text-foreground md:text-[2.85rem]">
-              {props.title}
-            </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground md:text-base">
-              {props.summary}
-            </p>
-          </div>
-          <div className="inline-flex w-fit items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-            {props.status}
+      <section className="space-y-4">
+        <div className={`${panelClass} relative overflow-hidden px-5 py-5 md:px-6`}>
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_65%)]" />
+          <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className={labelClass}>Overview</div>
+              <h2 className="mt-3 text-[1.9rem] font-semibold tracking-[-0.06em] text-white md:text-[2.25rem]">
+                {props.title}
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58 md:text-base">
+                {props.summary}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/52">
+                {props.status}
+              </span>
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/42">
+                {props.headlineLabel}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-          <article className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#040404] p-6 text-white shadow-[0_28px_80px_rgba(0,0,0,0.34)]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(240,205,115,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0))]" />
-            <div className="relative">
-              <div className="flex items-start justify-between gap-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
+          <article className={`${panelClass} px-5 py-5 md:px-6`}>
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <div className="text-lg font-semibold tracking-[-0.04em] text-white">
-                    Pipeline performance
-                  </div>
-                  <div className="mt-5 text-sm text-white/56">
-                    {props.headlineLabel}
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-baseline gap-3">
-                    <div className="text-5xl font-semibold tracking-[-0.08em] text-white md:text-6xl">
+                  <div className={labelClass}>Pipeline Performance</div>
+                  <div className="mt-3 flex flex-wrap items-baseline gap-3">
+                    <div className="text-[3rem] font-semibold tracking-[-0.08em] text-white md:text-[3.6rem]">
                       {props.headlineValue}
                     </div>
                     <div className={`text-sm font-semibold ${deltaToneClass(props.deltaTone)}`}>
@@ -412,78 +426,88 @@ export const registry: ComponentRegistry = {
                     </div>
                   </div>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 font-mono text-[11px] uppercase tracking-[0.24em] text-white/52">
-                  5 stages
+                <div className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-white/42">
+                  5 Stages
                 </div>
               </div>
 
-              <div className="mt-6">
-                <svg
-                  className="h-[16rem] w-full"
-                  viewBox={`0 0 ${trend.width} ${trend.height}`}
-                  fill="none"
-                >
-                  <defs>
-                    <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(255,255,255,0.34)" />
-                      <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
-                    </linearGradient>
-                  </defs>
+              <div className="relative overflow-hidden rounded-[14px] border border-white/[0.08] bg-[rgba(255,255,255,0.02)] p-4">
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:24px_24px] opacity-40" />
+                <div className="relative">
+                  <svg
+                    className="h-[16rem] w-full"
+                    viewBox={`0 0 ${trend.width} ${trend.height}`}
+                    fill="none"
+                  >
+                    <defs>
+                      <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+                        <stop offset="100%" stopColor="rgba(255,255,255,0.01)" />
+                      </linearGradient>
+                    </defs>
 
-                  {trend.gridLines.map((y) => (
-                    <line
-                      key={y}
-                      x1="18"
-                      x2={trend.width - 18}
-                      y1={y}
-                      y2={y}
-                      stroke="rgba(255,255,255,0.09)"
-                    />
-                  ))}
-
-                  <path d={trend.areaPath} fill={`url(#${gradientId})`} />
-                  <path
-                    d={trend.linePath}
-                    stroke="rgba(255,255,255,0.94)"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="3"
-                  />
-
-                  {trend.points.map((point) => (
-                    <g key={point.label}>
-                      <circle
-                        cx={point.x}
-                        cy={point.y}
-                        fill="rgba(4,4,4,1)"
-                        r="6.5"
-                        stroke="rgba(255,255,255,0.9)"
-                        strokeWidth="2.5"
+                    {trend.gridLines.map((y) => (
+                      <line
+                        key={y}
+                        x1="18"
+                        x2={trend.width - 18}
+                        y1={y}
+                        y2={y}
+                        stroke="rgba(255,255,255,0.08)"
                       />
-                    </g>
-                  ))}
-                </svg>
+                    ))}
 
-                <div className="mt-2 grid grid-cols-5 gap-2 text-[12px] text-white/48">
-                  {trend.points.map((point) => (
-                    <div key={point.label} className="text-center">
-                      {point.label}
-                    </div>
-                  ))}
+                    <path d={trend.areaPath} fill={`url(#${gradientId})`} />
+                    <path
+                      d={trend.linePath}
+                      stroke="rgba(255,255,255,0.88)"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                    />
+
+                    {trend.points.map((point) => (
+                      <g key={point.label}>
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          fill="rgba(0,0,0,1)"
+                          r="5.5"
+                          stroke="rgba(255,255,255,0.78)"
+                          strokeWidth="2"
+                        />
+                      </g>
+                    ))}
+                  </svg>
+
+                  <div className="mt-2 grid grid-cols-5 gap-2 font-mono text-[11px] uppercase tracking-[0.16em] text-white/40">
+                    {trend.points.map((point) => (
+                      <div key={point.label} className="text-center">
+                        {point.label}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-7 space-y-4 border-t border-white/8 pt-5">
+              <div className="grid gap-3 md:grid-cols-3">
                 {props.progress.map((item) => (
-                  <div key={item.label} className="space-y-2">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-white/72">{item.label}</span>
-                      <span className="text-sm text-white/54">{item.note}</span>
+                  <div key={item.label} className={`${mutedPanelClass} px-4 py-4`}>
+                    <div className={labelClass}>{item.label}</div>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <span className="text-2xl font-semibold tracking-[-0.05em] text-white">
+                        {item.value}%
+                      </span>
+                      <span className="text-xs text-white/44">{item.note}</span>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
                       <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#f0cd73,#ffffff)]"
-                        style={{ width: `${Math.max(8, clampPercentage(item.value))}%` }}
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.max(8, clampPercentage(item.value))}%`,
+                          background:
+                            "linear-gradient(90deg, rgba(255,255,255,0.88), rgba(59,130,246,0.72))",
+                        }}
                       />
                     </div>
                   </div>
@@ -493,139 +517,131 @@ export const registry: ComponentRegistry = {
           </article>
 
           <div className="grid gap-4">
-            <article className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5 text-white shadow-[0_24px_64px_rgba(0,0,0,0.24)]">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(111,211,200,0.18),transparent_34%)]" />
-              <div className="relative">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-semibold tracking-[-0.04em] text-white">
-                      {props.distributionTitle}
-                    </div>
-                    <div className="mt-1 text-sm text-white/52">
-                      Where the densest signal clusters landed in this run.
-                    </div>
-                  </div>
-                  <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 font-mono text-[11px] uppercase tracking-[0.22em] text-white/48">
-                    {distribution.length} slices
+            <article className={`${panelClass} px-5 py-5`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className={labelClass}>{props.distributionTitle}</div>
+                  <div className="mt-2 text-sm leading-6 text-white/58">
+                    Signal clusters across the latest rendered output.
                   </div>
                 </div>
+                <div className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/42">
+                  {distribution.length} Slices
+                </div>
+              </div>
 
-                <div className="mt-5 flex flex-col gap-5 md:flex-row md:items-center">
-                  <div className="relative mx-auto flex h-40 w-40 items-center justify-center md:mx-0">
-                    <svg className="-rotate-90" viewBox="0 0 160 160">
+              <div className="mt-5 flex flex-col gap-5 md:flex-row md:items-center">
+                <div className="relative mx-auto flex h-40 w-40 items-center justify-center md:mx-0">
+                  <svg className="-rotate-90" viewBox="0 0 160 160">
+                    <circle
+                      cx="80"
+                      cy="80"
+                      fill="none"
+                      r="52"
+                      stroke="rgba(255,255,255,0.08)"
+                      strokeWidth="16"
+                    />
+                    {donutSegments.map((segment) => (
                       <circle
+                        key={segment.label}
                         cx="80"
                         cy="80"
                         fill="none"
                         r="52"
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth="18"
+                        stroke={segment.color}
+                        strokeDasharray={segment.dashArray}
+                        strokeDashoffset={segment.dashOffset}
+                        strokeLinecap="round"
+                        strokeWidth="16"
                       />
-                      {donutSegments.map((segment) => (
-                        <circle
-                          key={segment.label}
-                          cx="80"
-                          cy="80"
-                          fill="none"
-                          r="52"
-                          stroke={segment.color}
-                          strokeDasharray={segment.dashArray}
-                          strokeDashoffset={segment.dashOffset}
-                          strokeLinecap="round"
-                          strokeWidth="18"
-                        />
-                      ))}
-                    </svg>
-                    <div className="absolute text-center">
-                      <div className="text-3xl font-semibold tracking-[-0.07em] text-white">
-                        {formatCompactNumber(distributionTotal)}
-                      </div>
-                      <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.24em] text-white/40">
-                        Total
-                      </div>
+                    ))}
+                  </svg>
+                  <div className="absolute text-center">
+                    <div className="text-3xl font-semibold tracking-[-0.07em] text-white">
+                      {formatCompactNumber(distributionTotal)}
+                    </div>
+                    <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
+                      Total
                     </div>
                   </div>
+                </div>
 
-                  <div className="min-w-0 flex-1 space-y-3">
-                    {distribution.map((item, index) => (
-                      <div
-                        key={`${item.label}-${index}`}
-                        className="rounded-[18px] border border-white/8 bg-white/[0.03] p-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="h-2.5 w-2.5 rounded-full"
-                              style={{
-                                backgroundColor:
-                                  donutPalette[index % donutPalette.length],
-                              }}
-                            />
-                            <span className="truncate text-sm text-white/78">
-                              {item.label}
-                            </span>
-                          </div>
-                          <span className="text-sm text-white/58">
-                            {formatCompactNumber(item.value)}
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  {distribution.map((item, index) => (
+                    <div
+                      key={`${item.label}-${index}`}
+                      className={`${mutedPanelClass} px-3 py-3`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{
+                              backgroundColor:
+                                donutPalette[index % donutPalette.length],
+                            }}
+                          />
+                          <span className="truncate text-sm text-white/76">
+                            {item.label}
                           </span>
                         </div>
-                        {item.note ? (
-                          <div className="mt-1 text-xs text-white/42">{item.note}</div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(240,205,115,0.08),rgba(255,255,255,0.03))] p-5 text-white shadow-[0_24px_64px_rgba(0,0,0,0.24)]">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(140,167,255,0.18),transparent_34%)]" />
-              <div className="relative">
-                <div className="text-lg font-semibold tracking-[-0.04em] text-white">
-                  {props.leaderboardTitle}
-                </div>
-                <div className="mt-1 text-sm text-white/52">
-                  A ranked read on the strongest surfaced entities and signals.
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  {props.leaderboard.map((item) => (
-                    <div key={`${item.label}-${item.value}`} className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="truncate text-sm text-white/80">{item.label}</span>
-                        <span className="text-sm text-white/56">
+                        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/42">
                           {formatCompactNumber(item.value)}
                         </span>
                       </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-[linear-gradient(90deg,#8ca7ff,#f0cd73)]"
-                          style={{
-                            width: `${Math.max(10, (item.value / leaderboardMax) * 100)}%`,
-                          }}
-                        />
-                      </div>
                       {item.note ? (
-                        <div className="text-xs text-white/42">{item.note}</div>
+                        <div className="mt-1 text-xs text-white/42">{item.note}</div>
                       ) : null}
                     </div>
                   ))}
                 </div>
-
-                {props.notes.length > 0 ? (
-                  <div className="mt-6 flex flex-wrap gap-2">
-                    {props.notes.map((note, index) => (
-                      <span
-                        key={`${note}-${index}`}
-                        className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/70"
-                      >
-                        {note}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
               </div>
+            </article>
+
+            <article className={`${panelClass} px-5 py-5`}>
+              <div className={labelClass}>{props.leaderboardTitle}</div>
+              <div className="mt-2 text-sm leading-6 text-white/58">
+                Highest-signal entities ranked from the current run.
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {props.leaderboard.map((item) => (
+                  <div key={`${item.label}-${item.value}`} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm text-white/80">{item.label}</span>
+                      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/42">
+                        {formatCompactNumber(item.value)}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.max(10, (item.value / leaderboardMax) * 100)}%`,
+                          background:
+                            "linear-gradient(90deg, rgba(255,255,255,0.92), rgba(59,130,246,0.6))",
+                        }}
+                      />
+                    </div>
+                    {item.note ? (
+                      <div className="text-xs text-white/42">{item.note}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              {props.notes.length > 0 ? (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {props.notes.map((note, index) => (
+                    <span
+                      key={`${note}-${index}`}
+                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/68"
+                    >
+                      {note}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </article>
           </div>
         </div>
@@ -633,17 +649,52 @@ export const registry: ComponentRegistry = {
     );
   },
   CTAGroup: ({ element }) => (
-    <div className="rounded-[24px] border border-[rgba(255,255,255,0.08)] bg-[var(--panel-ink)] px-5 py-5 text-white">
-      <div className="text-base font-semibold">{element.props.title}</div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {(element.props.buttons as CtaButton[]).map((button, index) => (
-          <span
-            key={`${button.label}-${index}`}
-            className="rounded-full border border-white/16 px-3 py-2 text-xs uppercase tracking-[0.18em] text-white/84"
-          >
-            {button.label}
-          </span>
-        ))}
+    <div className={`${panelClass} relative h-fit overflow-hidden px-5 py-5 text-white md:px-6`}>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(240,205,115,0.16),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0))]" />
+      <div className="relative flex flex-col gap-5">
+        <div>
+          <div className={labelClass}>{element.props.title}</div>
+          <p className="mt-3 max-w-md text-sm leading-6 text-white/58">
+            Keep moving from this run by choosing the clearest next action below.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(element.props.buttons as CtaButton[]).map((button, index) => (
+            <div
+              key={`${button.label}-${index}`}
+              className="rounded-[16px] border border-white/[0.1] bg-black/30 px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold tracking-[-0.02em] text-white">
+                    {button.label}
+                  </div>
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/38">
+                    {index === 0 ? "Recommended" : "Available"}
+                  </div>
+                </div>
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+                  Next
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-white/58">
+                {button.hint ?? describeCtaButton(button.label)}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {(element.props.buttons as CtaButton[]).map((button, index) => (
+            <span
+              key={`${button.label}-pill-${index}`}
+              className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] text-white/60"
+            >
+              {button.label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   ),
@@ -730,4 +781,22 @@ function deltaToneClass(tone: AnalyticsDeckProps["deltaTone"]) {
     case "neutral":
       return "text-white/54";
   }
+}
+
+function describeCtaButton(label: string) {
+  const normalized = label.trim().toLowerCase();
+
+  if (normalized.includes("refine")) {
+    return "Narrow the shortlist with sharper filters, geography, or stage constraints.";
+  }
+
+  if (normalized.includes("export")) {
+    return "Download the current record set for review, sharing, or handoff.";
+  }
+
+  if (normalized.includes("switch")) {
+    return "Move to a different layout if you want another angle on the same run.";
+  }
+
+  return "Take the next step that best matches how you want to inspect this run.";
 }

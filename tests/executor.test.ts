@@ -133,4 +133,30 @@ describe("runWorkflow", () => {
       true,
     );
   });
+
+  it("avoids generic company placeholders in mocked company-search runs", async () => {
+    const run = await runWorkflow(
+      {
+        ...baseSpec,
+        sourceHints: ["manual prompt"],
+      },
+      createThreadStateSnapshot(),
+    );
+
+    expect(run.status).toBe("mocked");
+    expect(run.records.length).toBeGreaterThan(0);
+    expect(
+      run.records.every((record) => !/^company-\d+$/i.test(record.inputKey)),
+    ).toBe(true);
+    expect(
+      run.records.every(
+        (record) =>
+          !/company \d+/i.test(String(record.derivedPayload?.name ?? "")),
+      ),
+    ).toBe(true);
+    expect(
+      run.records.every((record) => record.sourceHint === "manual prompt (mock)"),
+    ).toBe(true);
+    expect(isNonEmptySpec(run.uiModel)).toBe(true);
+  });
 });
