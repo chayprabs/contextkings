@@ -64,4 +64,29 @@ describe("plan mode helpers", () => {
     expect(executionWorkflow.inputs.filters).toBeUndefined();
     expect(executionWorkflow.warnings.join(" ")).toContain("filter step was removed");
   });
+
+  it("breaks detailed company filters into stage and fit steps", () => {
+    const latestWorkflow = heuristicWorkflowFromPrompt(
+      "Research B2B SaaS companies in India for outbound",
+      createThreadStateSnapshot(),
+      null,
+    );
+    const workflow = validateWorkflowSpec(
+      heuristicWorkflowFromPrompt(
+        "add a more detailed filter request",
+        createThreadStateSnapshot({
+          latestWorkflow,
+        }),
+        null,
+      ),
+    );
+
+    const steps = workflowToPlanSteps(workflow);
+    const filterSteps = steps.filter((step) => step.type === "filter");
+
+    expect(filterSteps.length).toBeGreaterThan(1);
+    expect(filterSteps.map((step) => step.label)).toEqual(
+      expect.arrayContaining(["Stage qualification", "ICP fit filter"]),
+    );
+  });
 });

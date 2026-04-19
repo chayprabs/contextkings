@@ -1,4 +1,12 @@
-import { createThreadStateSnapshot, type RunResult, type SourceContext, type ValidatedWorkflowSpec, type WorkflowSpec } from "@/lib/workflow/schema";
+import {
+  createThreadStateSnapshot,
+  type FilterCondition,
+  type FilterGroup,
+  type RunResult,
+  type SourceContext,
+  type ValidatedWorkflowSpec,
+  type WorkflowSpec,
+} from "@/lib/workflow/schema";
 import { heuristicWorkflowFromPrompt } from "@/lib/workflow/planner";
 import { validateWorkflowSpec } from "@/lib/workflow/validator";
 
@@ -21,6 +29,22 @@ export interface PlanMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachment?: PlanAttachment | null;
+}
+
+export interface PlanAttachment {
+  name: string;
+  mimeType: string;
+}
+
+export interface SavedRun {
+  id: string;
+  runId?: string;
+  title: string;
+  timestamp: number;
+  steps: WorkflowStep[];
+  workflow?: ValidatedWorkflowSpec | null;
+  sourceContext?: SourceContext | null;
 }
 
 export type ViewType =
@@ -60,15 +84,7 @@ export function workflowToPlanSteps(
     confirmed: true,
   });
 
-  if (shouldIncludeFilterStep(workflow)) {
-    steps.push({
-      id: `filter-${steps.length + 1}`,
-      type: "filter",
-      label: buildFilterLabel(workflow),
-      description: buildFilterDescription(workflow),
-      confirmed: true,
-    });
-  }
+  steps.push(...buildFilterSteps(workflow, steps.length));
 
   if (shouldIncludeEnrichStep(workflow)) {
     steps.push({
@@ -103,21 +119,29 @@ export function buildPlanAssistantMessage(
   workflow: ValidatedWorkflowSpec,
   steps: WorkflowStep[],
 ) {
+  const filterSteps = steps.filter((step) => step.type === "filter");
   const warnings =
     workflow.warnings.length > 0
       ? ` ${workflow.warnings[0]}`
       : "";
-  const assumptions =
-    workflow.assumptions.length > 0
-      ? ` I also noted ${workflow.assumptions[0].charAt(0).toLowerCase()}${workflow.assumptions[0].slice(1)}`
+  const assistantNote = selectAssistantNote(workflow);
+  const intro = assistantNote?.toLowerCase().includes("follow-up refinement")
+    ? "I refined the existing request into"
+    : "I mapped this request into";
+  const assumptionSuffix = assistantNote
+    ? ` I also noted ${assistantNote.charAt(0).toLowerCase()}${assistantNote.slice(1)}.`
+    : "";
+  const filterSuffix =
+    filterSteps.length > 1
+      ? ` I split the filter phase into ${filterSteps.length} focused steps so stage and fit can be handled separately.`
       : "";
 
-  return `I mapped this request into a ${steps.length}-step ${describeWorkflowShape(workflow)} workflow. We will start with ${steps[0]?.label.toLowerCase() ?? "the source step"}, then move through ${steps
+  return `${intro} a ${steps.length}-step ${describeWorkflowShape(workflow)} workflow. We will start with ${steps[0]?.label.toLowerCase() ?? "the source step"}, then move through ${steps
     .slice(1, -1)
     .map((step) => step.label.toLowerCase())
     .join(", ")}, and finish with ${steps.at(-1)?.label.toLowerCase() ?? "the final output"}.${
-    assumptions ? `${assumptions}.` : ""
-  }${warnings}`;
+    assumptionSuffix
+  }${filterSuffix}${warnings}`;
 }
 
 export function detectViewType(
@@ -258,8 +282,82 @@ function shouldIncludeFilterStep(workflow: WorkflowSpec | ValidatedWorkflowSpec)
   );
 }
 
+function buildFilterSteps(
+  workflow: WorkflowSpec | ValidatedWorkflowSpec,
+  currentStepCount: number,
+) {
+  if (!shouldIncludeFilterStep(workflow)) {
+    return [];
+  }
+
+  const { stage, fit, guardrails } = classifyFilters(workflow.inputs.filters);
+  const granularBreakdown =
+    stage.length > 0 ||
+    fit.length > 0 ||
+    guardrails.length > 0 ||
+    workflow.assumptions.some((assumption) =>
+      assumption.toLowerCase().includes("stage and fit"),
+    );
+
+  if (!granularBreakdown) {
+    return [
+      {
+        id: `filter-${currentStepCount + 1}`,
+        type: "filter" as const,
+        label: buildFilterLabel(workflow),
+        description: buildFilterDescription(workflow),
+        confirmed: true,
+      },
+    ];
+  }
+
+  const steps: WorkflowStep[] = [];
+
+  steps.push({
+    id: `filter-${currentStepCount + steps.length + 1}`,
+    type: "filter",
+    label: workflow.entityType === "person" ? "Qualification gate" : "Stage qualification",
+    description:
+      stage.length > 0
+        ? `Gate the shortlist using ${summarizeConditions(stage)} before enrichment.`
+        : "Gate the shortlist using maturity, size, or momentum signals before enrichment.",
+    confirmed: true,
+  });
+
+  steps.push({
+    id: `filter-${currentStepCount + steps.length + 1}`,
+    type: "filter",
+    label: workflow.entityType === "person" ? "Role-fit filter" : "ICP fit filter",
+    description:
+      fit.length > 0
+        ? `Keep only records that match ${summarizeConditions(fit)}.`
+        : "Keep only records that match the strongest industry, geography, or role-fit signals.",
+    confirmed: true,
+  });
+
+  if (guardrails.length > 0) {
+    steps.push({
+      id: `filter-${currentStepCount + steps.length + 1}`,
+      type: "filter",
+      label: "Shortlist guardrails",
+      description: `Apply the remaining guardrails for ${summarizeConditions(guardrails)}.`,
+      confirmed: true,
+    });
+  }
+
+  return steps;
+}
+
 function shouldIncludeEnrichStep(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   return workflow.crustPlan.some((step) => step.step.includes("enrich"));
+}
+
+function selectAssistantNote(workflow: ValidatedWorkflowSpec) {
+  return workflow.assumptions.find((assumption) => !isGeneratedMarker(assumption));
+}
+
+function isGeneratedMarker(value: string) {
+  return value.startsWith("Workflow draft generated with ");
 }
 
 function buildSourceLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
@@ -381,6 +479,89 @@ function describeWorkflowShape(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   }
 
   return "company research";
+}
+
+function classifyFilters(filters?: FilterCondition | FilterGroup) {
+  const flattened = flattenFilters(filters);
+
+  return flattened.reduce<{
+    stage: FilterCondition[];
+    fit: FilterCondition[];
+    guardrails: FilterCondition[];
+  }>(
+    (accumulator, condition) => {
+      const field = condition.field.toLowerCase();
+      if (
+        field.includes("funding") ||
+        field.includes("headcount") ||
+        field.includes("job_openings")
+      ) {
+        accumulator.stage.push(condition);
+        return accumulator;
+      }
+
+      if (
+        field.includes("industry") ||
+        field.includes("country") ||
+        field.includes("location") ||
+        field.includes("title") ||
+        field.includes("skill")
+      ) {
+        accumulator.fit.push(condition);
+        return accumulator;
+      }
+
+      accumulator.guardrails.push(condition);
+      return accumulator;
+    },
+    {
+      stage: [],
+      fit: [],
+      guardrails: [],
+    },
+  );
+}
+
+function flattenFilters(filters?: FilterCondition | FilterGroup): FilterCondition[] {
+  if (!filters) {
+    return [];
+  }
+
+  if ("field" in filters) {
+    return [filters];
+  }
+
+  return filters.conditions.flatMap((condition) => flattenFilters(condition));
+}
+
+function summarizeConditions(conditions: FilterCondition[]) {
+  return conditions
+    .map((condition) => describeCondition(condition))
+    .join(", ");
+}
+
+function describeCondition(condition: FilterCondition) {
+  const field = condition.field.split(".").at(-1)?.replaceAll("_", " ") ?? condition.field;
+  const normalizedValue = Array.isArray(condition.value)
+    ? condition.value.join("/")
+    : String(condition.value);
+
+  switch (condition.type) {
+    case "=":
+      return `${field} = ${normalizedValue}`;
+    case "contains":
+      return `${field} contains ${normalizedValue}`;
+    case "in":
+      return `${field} in ${normalizedValue}`;
+    case ">=":
+    case "=>":
+      return `${field} >= ${normalizedValue}`;
+    case "<=":
+    case "=<":
+      return `${field} <= ${normalizedValue}`;
+    default:
+      return `${field} ${condition.type} ${normalizedValue}`;
+  }
 }
 
 function formatDuration(durationMs: number) {

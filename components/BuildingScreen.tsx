@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useState } from "react";
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
 import { createExecutionMetadata, detectViewType, type ExecutionResponse, type WorkflowStep } from "@/lib/plan-mode";
 import type { SourceContext, ValidatedWorkflowSpec } from "@/lib/workflow/schema";
 
@@ -146,91 +147,94 @@ export function BuildingScreen({
 
   return (
     <section className="min-h-screen bg-background text-foreground">
-      <header className="relative flex h-12 items-center justify-center border-b border-border">
-        <div className="text-sm tracking-[0.28em] text-foreground">ContextKings</div>
-      </header>
+      <AppHeader />
 
-      <div className="mx-auto flex min-h-[calc(100svh-3rem)] max-w-4xl flex-col items-center justify-center px-6 py-12">
-        <div className="flex h-20 w-20 items-center justify-center">
-          <svg className="h-20 w-20 -rotate-90" viewBox="0 0 80 80">
-            <circle
-              className="stroke-border"
-              cx="40"
-              cy="40"
-              fill="none"
-              r="34"
-              strokeWidth="3"
-            />
-            <circle
-              className="stroke-foreground transition-[stroke-dashoffset] duration-500"
-              cx="40"
-              cy="40"
-              fill="none"
-              r="34"
-              strokeDasharray={circumference}
-              strokeDashoffset={offset}
-              strokeLinecap="round"
-              strokeWidth="3"
-            />
-          </svg>
-          <div className="absolute text-center">
-            <div className="text-lg font-semibold tabular-nums text-foreground">
-              {completedCount} / {steps.length}
+      <div className="app-frame flex min-h-[calc(100svh-3.5rem)] flex-col items-center justify-center px-6 py-12">
+        <div className="shell-panel w-full max-w-2xl rounded-[34px] px-6 py-8 md:px-8 md:py-9">
+          <div className="flex justify-center">
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <svg className="h-24 w-24 -rotate-90" viewBox="0 0 80 80">
+                <circle
+                  className="stroke-border"
+                  cx="40"
+                  cy="40"
+                  fill="none"
+                  r="34"
+                  strokeWidth="3"
+                />
+                <circle
+                  className="stroke-[var(--accent)] transition-[stroke-dashoffset] duration-500"
+                  cx="40"
+                  cy="40"
+                  fill="none"
+                  r="34"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={offset}
+                  strokeLinecap="round"
+                  strokeWidth="3"
+                />
+              </svg>
+              <div className="absolute text-center">
+                <div className="font-mono text-lg font-semibold tabular-nums text-foreground">
+                  {completedCount} / {steps.length}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mt-8 text-center">
-          <h1 className="text-3xl font-semibold tracking-[-0.05em] text-foreground">
-            Building your workspace
-          </h1>
-          <p className="mt-2 text-base text-muted-foreground">
-            Running: {runningLabel}
-          </p>
-        </div>
+          <div className="mt-8 text-center">
+            <div className="thin-label text-[var(--accent)]">Execution in progress</div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.06em] text-foreground md:text-[2.35rem]">
+              Building your workspace
+            </h1>
+            <p className="mt-2 text-base text-muted-foreground">
+              Running: {runningLabel}
+            </p>
+          </div>
 
-        <div className="mt-10 w-full space-y-3">
-          {steps.map((step, index) => {
-            const isCompleted = completedSteps.has(index);
-            const isActive = index === activeStep && activeStep < steps.length;
-            const isPending = !isCompleted && !isActive;
+          <div className="mt-10 w-full space-y-3">
+            {steps.map((step, index) => {
+              const isCompleted = completedSteps.has(index);
+              const isActive = index === activeStep && activeStep < steps.length;
+              const isPending = !isCompleted && !isActive;
 
-            return (
-              <div
-                key={step.id}
-                className={`flex items-center justify-between gap-4 rounded-2xl px-4 py-4 ${
-                  isActive ? "border border-border bg-card" : ""
-                }`}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  {isCompleted ? (
-                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
-                  ) : isActive ? (
-                    <Loader2 className="h-5 w-5 shrink-0 animate-spin text-foreground" />
-                  ) : (
-                    <Circle className="h-5 w-5 shrink-0 text-muted-foreground/40" />
-                  )}
-                  <div
-                    className={`min-w-0 text-sm ${
-                      isPending
-                        ? "text-muted-foreground/50"
-                        : isCompleted
-                          ? "text-muted-foreground"
-                          : "text-foreground"
-                    }`}
-                  >
-                    {step.label}
+              return (
+                <div
+                  key={step.id}
+                  className={`flex items-center justify-between gap-4 rounded-[24px] px-4 py-4 transition ${
+                    isActive ? "border border-border bg-card" : "border border-transparent"
+                  }`}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
+                    ) : isActive ? (
+                      <Loader2 className="h-5 w-5 shrink-0 animate-spin text-foreground" />
+                    ) : (
+                      <Circle className="h-5 w-5 shrink-0 text-muted-foreground/40" />
+                    )}
+                    <div
+                      className={`min-w-0 text-sm ${
+                        isPending
+                          ? "text-muted-foreground/50"
+                          : isCompleted
+                            ? "text-muted-foreground"
+                            : "text-foreground"
+                      }`}
+                    >
+                      {step.label}
+                    </div>
                   </div>
-                </div>
 
-                {isCompleted ? (
-                  <div className="text-sm text-emerald-400">done</div>
-                ) : isActive ? (
-                  <div className="text-sm text-muted-foreground">running</div>
-                ) : null}
-              </div>
-            );
-          })}
+                  {isCompleted ? (
+                    <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-emerald-400">done</div>
+                  ) : isActive ? (
+                    <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">running</div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

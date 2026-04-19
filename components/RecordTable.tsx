@@ -6,7 +6,7 @@ interface RecordTableProps {
 
 export function RecordTable({ columns, rows, caption }: RecordTableProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border">
+    <div className="overflow-hidden rounded-[24px] border border-border bg-background">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-border text-left text-sm">
           <thead className="bg-background">
@@ -14,7 +14,7 @@ export function RecordTable({ columns, rows, caption }: RecordTableProps) {
               {columns.map((column) => (
                 <th
                   key={column}
-                  className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground"
+                  className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground"
                   scope="col"
                 >
                   {column}
@@ -24,7 +24,10 @@ export function RecordTable({ columns, rows, caption }: RecordTableProps) {
           </thead>
           <tbody className="divide-y divide-border bg-card">
             {rows.map((row, index) => (
-              <tr key={`${row[0] ?? "row"}-${index}`}>
+              <tr
+                key={`${row[0] ?? "row"}-${index}`}
+                className="transition hover:bg-background/70"
+              >
                 {row.map((cell, cellIndex) => (
                   <td
                     key={`${index}-${cellIndex}`}

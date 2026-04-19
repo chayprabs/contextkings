@@ -79,7 +79,7 @@ export function buildFallbackRunSpec(run: RunResult | null): Spec | null {
       type: "TagBar",
       props: {
         title: "Warnings and mode",
-        tags: [run.status, ...run.warnings.slice(0, 5)],
+        tags: [run.status, ...run.warnings.slice(0, 5)].filter(Boolean),
       },
     },
     insights: {

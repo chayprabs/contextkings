@@ -29,7 +29,7 @@ export async function runWorkflow(spec: ValidatedWorkflowSpec, threadState: Thre
       createdAt: now,
       updatedAt: now,
       counts: {
-        input: Math.max(spec.inputs.identifiers.length, spec.inputs.manualEntries.length, records.length),
+        input: resolveInputCount(spec, records.length),
         enriched: records.length,
         derived: records.length,
         failed: 0,
@@ -50,7 +50,7 @@ export async function runWorkflow(spec: ValidatedWorkflowSpec, threadState: Thre
       createdAt: now,
       updatedAt: now,
       counts: {
-        input: Math.max(spec.inputs.identifiers.length, spec.inputs.manualEntries.length, 0),
+        input: resolveInputCount(spec, 0),
         enriched: 0,
         derived: 0,
         failed: 1,
@@ -85,8 +85,11 @@ async function executeLiveWorkflow(client: CrustDataClient, spec: ValidatedWorkf
       const searchResponse = await client.searchPeople(spec);
       const shortlist = normalizeArray(searchResponse).slice(0, spec.inputs.limit);
       const identifiers = shortlist
-        .map((row) => row.professional_network_profile_url ?? row.linkedin_profile_url ?? row.business_email)
+        .map(extractPersonIdentifier)
         .filter(isString);
+      if (identifiers.length === 0) {
+        return normalizePeople(searchResponse);
+      }
       const enrichSpec = {
         ...spec,
         inputs: {
@@ -94,7 +97,8 @@ async function executeLiveWorkflow(client: CrustDataClient, spec: ValidatedWorkf
           identifiers,
         },
       };
-      return normalizePeople(await client.enrichPeople(enrichSpec));
+      const enriched = normalizePeople(await client.enrichPeople(enrichSpec));
+      return enriched.length > 0 ? enriched : normalizePeople(searchResponse);
     }
 
     return normalizePeople(await client.enrichPeople(spec));
@@ -106,9 +110,11 @@ async function executeLiveWorkflow(client: CrustDataClient, spec: ValidatedWorkf
       const searchResponse = await client.searchCompanies(spec);
       const shortlist = normalizeArray(searchResponse).slice(0, spec.inputs.limit);
       const identifiers = shortlist
-        .map((row) => row.crustdata_company_id ?? row.domain ?? row.company_domain ?? row.name)
-        .filter(isString)
-        .map(String);
+        .map(extractCompanyIdentifier)
+        .filter(isString);
+      if (identifiers.length === 0) {
+        return normalizeCompanies(searchResponse);
+      }
       const enrichSpec = {
         ...spec,
         inputs: {
@@ -116,7 +122,8 @@ async function executeLiveWorkflow(client: CrustDataClient, spec: ValidatedWorkf
           identifiers,
         },
       };
-      return normalizeCompanies(await client.enrichCompanies(enrichSpec));
+      const enriched = normalizeCompanies(await client.enrichCompanies(enrichSpec));
+      return enriched.length > 0 ? enriched : normalizeCompanies(searchResponse);
     }
 
     return normalizeCompanies(await client.enrichCompanies(spec));
@@ -126,18 +133,8 @@ async function executeLiveWorkflow(client: CrustDataClient, spec: ValidatedWorkf
 }
 
 async function maybeAutocomplete(client: CrustDataClient, spec: ValidatedWorkflowSpec) {
-  if (!spec.inputs.filters) {
-    return;
-  }
-
-  const filterText = JSON.stringify(spec.inputs.filters).toLowerCase();
-  if (spec.entityType === "company" && filterText.includes("industry")) {
-    await client.autocompleteCompanies("", spec.inputs.filters);
-  }
-
-  if (spec.entityType === "person" && filterText.includes("title")) {
-    await client.autocompletePeople("", spec.inputs.filters);
-  }
+  void client;
+  void spec;
 }
 
 function normalizeCompanies(payload: unknown): RecordEnvelope[] {
@@ -399,4 +396,39 @@ function firstString(...values: unknown[]) {
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function resolveInputCount(spec: ValidatedWorkflowSpec, recordsLength: number) {
+  const explicitInputs = Math.max(
+    spec.inputs.identifiers.length,
+    spec.inputs.manualEntries.length,
+  );
+
+  return explicitInputs > 0 ? explicitInputs : recordsLength;
+}
+
+function extractCompanyIdentifier(row: UnknownRecord) {
+  const basicInfo = asRecord(row.basic_info);
+
+  return firstString(
+    row.crustdata_company_id,
+    row.company_website_domain,
+    row.domain,
+    basicInfo?.domain,
+    row.linkedin_profile_url,
+    row.company_name,
+    basicInfo?.name,
+  );
+}
+
+function extractPersonIdentifier(row: UnknownRecord) {
+  const basicProfile = asRecord(row.basic_profile);
+
+  return firstString(
+    row.professional_network_profile_url,
+    row.linkedin_profile_url,
+    row.business_email,
+    row.work_email,
+    basicProfile?.linkedin_profile_url,
+  );
 }

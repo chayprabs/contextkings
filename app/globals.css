@@ -1,19 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #111111;
-  --border: #e5e5e5;
-  --card: #fafafa;
-  --muted-foreground: #737373;
+  --background: #080808;
+  --foreground: #f5f1e8;
+  --border: rgba(255, 255, 255, 0.11);
+  --card: rgba(19, 19, 19, 0.9);
+  --card-strong: #1c1c1c;
+  --muted-foreground: #9a968e;
+  --surface-shell: rgba(17, 17, 17, 0.96);
+  --surface-canvas: #040404;
+  --line: rgba(20, 18, 15, 0.09);
+  --panel: #f6f1e8;
+  --panel-strong: #efe8dd;
+  --panel-muted: #e8dfcf;
+  --panel-ink: #151311;
+  --accent: #f0cd73;
+  --accent-soft: #f2e7ca;
+  --success-soft: #10241b;
+  --warning-soft: #f4ecd5;
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #ededed;
-  --border: #222222;
-  --card: #111111;
-  --muted-foreground: #8a8a8a;
+  --background: #080808;
+  --foreground: #f5f1e8;
+  --border: rgba(255, 255, 255, 0.11);
+  --card: rgba(19, 19, 19, 0.9);
+  --card-strong: #1c1c1c;
+  --muted-foreground: #9a968e;
+  --surface-shell: rgba(17, 17, 17, 0.96);
+  --surface-canvas: #040404;
+  --line: rgba(20, 18, 15, 0.09);
+  --panel: #f6f1e8;
+  --panel-strong: #efe8dd;
+  --panel-muted: #e8dfcf;
+  --panel-ink: #151311;
+  --accent: #f0cd73;
+  --accent-soft: #f2e7ca;
+  --success-soft: #10241b;
+  --warning-soft: #f4ecd5;
 }
 
 @theme inline {
@@ -21,10 +45,18 @@
   --color-foreground: var(--foreground);
   --color-border: var(--border);
   --color-card: var(--card);
+  --color-card-strong: var(--card-strong);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent-blue: #0070f3;
-  --font-sans: var(--font-space-grotesk);
-  --font-mono: var(--font-ibm-plex-mono);
+  --color-shell: var(--surface-shell);
+  --color-canvas: var(--surface-canvas);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-panel-ink: var(--panel-ink);
+  --color-accent-warm: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
 }
 
 * {
@@ -38,15 +70,16 @@ body {
 
 html {
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(0, 112, 243, 0.1), transparent 24%),
-    #000;
+    radial-gradient(circle at top, rgba(240, 205, 115, 0.07), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.04), transparent 22%),
+    #050505;
 }
 
 body {
   background: transparent;
   color: var(--foreground);
-  font-family: var(--font-space-grotesk), sans-serif;
+  font-family: var(--font-geist), sans-serif;
+  letter-spacing: -0.01em;
 }
 
 a {
@@ -60,6 +93,58 @@ textarea {
   font: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
+textarea {
+  resize: none;
+}
+
 ::selection {
-  background: rgba(0, 112, 243, 0.28);
+  background: rgba(240, 205, 115, 0.28);
+}
+
+.shell-panel {
+  background: var(--surface-shell);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.canvas-panel {
+  background: var(--surface-canvas);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.soft-panel {
+  background: var(--panel);
+  color: var(--panel-ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 14px 36px rgba(38, 30, 15, 0.06);
+}
+
+.soft-panel-muted {
+  background: var(--panel-strong);
+  color: var(--panel-ink);
+  border: 1px solid var(--line);
+}
+
+.metric-dark-card {
+  background: #050505;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.thin-label {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.app-frame {
+  width: 100%;
+  max-width: 96rem;
+  margin-inline: auto;
 }
