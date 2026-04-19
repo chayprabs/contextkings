@@ -14,6 +14,31 @@ const COMPANY_SCREENER_FIELDS = [
   "funding_and_investment.last_funding_round_type",
   "job_openings.job_openings_count",
 ];
+const COMPANY_ENRICH_FIELDS = [
+  "basic_info",
+  "headcount",
+  "funding",
+  "hiring",
+  "locations",
+  "taxonomy",
+];
+const COMPANY_SEARCH_FIELDS = [
+  "crustdata_company_id",
+  "basic_info.name",
+  "basic_info.primary_domain",
+  "basic_info.professional_network_url",
+  "taxonomy.professional_network_industry",
+  "headcount.total",
+  "funding.total_investment_usd",
+];
+const SUPPORTED_COMPANY_SEARCH_FILTER_FIELDS = new Set([
+  "taxonomy.professional_network_industry",
+  "funding.last_round_type",
+  "headcount.total",
+]);
+const SUPPORTED_PERSON_SEARCH_FILTER_FIELDS = new Set([
+  "experience.employment_details.current.title",
+]);
 
 export class CrustDataClient {
   constructor(
@@ -27,12 +52,24 @@ export class CrustDataClient {
       return [];
     }
 
+    const crustdataCompanyIds = identifiers
+      .filter(isNumericId)
+      .map((value) => Number(value));
     const domains = identifiers.filter(isDomain);
-    const profileUrls = identifiers.filter((value) => value.includes("linkedin.com/company"));
+    const profileUrls = identifiers.filter(isCompanyProfileUrl);
     const names = identifiers.filter(
-      (value) => !isDomain(value) && !value.includes("linkedin.com/company"),
+      (value) => !isDomain(value) && !isCompanyProfileUrl(value) && !isNumericId(value),
     );
     const responses: unknown[] = [];
+
+    if (crustdataCompanyIds.length > 0) {
+      responses.push(
+        await this.post("/company/enrich", {
+          crustdata_company_ids: crustdataCompanyIds,
+          fields: COMPANY_ENRICH_FIELDS,
+        }),
+      );
+    }
 
     if (domains.length > 0) {
       const payload = await this.get("/screener/company", {
@@ -46,7 +83,7 @@ export class CrustDataClient {
       responses.push(
         await this.post("/company/enrich", {
           professional_network_profile_urls: profileUrls,
-          fields: spec.fieldSelections.company,
+          fields: COMPANY_ENRICH_FIELDS,
         }),
       );
     }
@@ -55,7 +92,7 @@ export class CrustDataClient {
       responses.push(
         await this.post("/company/enrich", {
           names,
-          fields: spec.fieldSelections.company,
+          fields: COMPANY_ENRICH_FIELDS,
         }),
       );
     }
@@ -95,24 +132,24 @@ export class CrustDataClient {
   }
 
   async searchCompanies(spec: ValidatedWorkflowSpec) {
+    const filters = spec.inputs.filters
+      ? sanitizeSearchFilters(spec.inputs.filters, SUPPORTED_COMPANY_SEARCH_FILTER_FIELDS)
+      : undefined;
+
     return this.post("/company/search", {
-      filters: spec.inputs.filters ? serializeFilters(spec.inputs.filters) : undefined,
+      filters: filters ? serializeFilters(filters) : undefined,
       limit: spec.inputs.limit,
-      fields: [
-        "crustdata_company_id",
-        "company_name",
-        "company_website_domain",
-        "linkedin_profile_url",
-        "taxonomy.linkedin_industries",
-        "headcount.linkedin_headcount",
-        "funding_and_investment.crunchbase_total_investment_usd",
-      ],
+      fields: COMPANY_SEARCH_FIELDS,
     });
   }
 
   async searchPeople(spec: ValidatedWorkflowSpec) {
+    const filters = spec.inputs.filters
+      ? sanitizeSearchFilters(spec.inputs.filters, SUPPORTED_PERSON_SEARCH_FILTER_FIELDS)
+      : undefined;
+
     return this.post("/person/search", {
-      filters: spec.inputs.filters ? serializeFilters(spec.inputs.filters) : undefined,
+      filters: filters ? serializeFilters(filters) : undefined,
       limit: spec.inputs.limit,
       fields: [
         "person_id",
@@ -314,7 +351,7 @@ function filterExactCompanyMatches(payload: unknown, requestedDomains: string[])
 
 function extractPayloadRows(payload: unknown) {
   if (Array.isArray(payload)) {
-    return payload.map(asRecord).filter(Boolean) as Array<Record<string, unknown>>;
+    return payload.flatMap((entry) => normalizePayloadEntry(asRecord(entry)));
   }
 
   const record = asRecord(payload);
@@ -338,7 +375,24 @@ function extractPayloadRows(payload: unknown) {
     return record.people.map(asRecord).filter(Boolean) as Array<Record<string, unknown>>;
   }
 
+  if (Array.isArray(record.profiles)) {
+    return record.profiles.map(asRecord).filter(Boolean) as Array<Record<string, unknown>>;
+  }
+
+  if (Array.isArray(record.value)) {
+    return record.value.flatMap((entry) => flattenEnrichEntry(asRecord(entry)));
+  }
+
   return [];
+}
+
+function normalizePayloadEntry(entry: Record<string, unknown> | null) {
+  if (!entry) {
+    return [];
+  }
+
+  const flattened = flattenEnrichEntry(entry);
+  return flattened.length > 0 ? flattened : [entry];
 }
 
 function asRecord(value: unknown) {
@@ -357,6 +411,14 @@ function firstString(...values: unknown[]) {
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isNumericId(value: string) {
+  return /^\d+$/.test(value.trim());
+}
+
+function isCompanyProfileUrl(value: string) {
+  return value.includes("linkedin.com/company");
 }
 
 function resolveRequestedDomain(
@@ -418,7 +480,84 @@ function serializeFilters(filter: FilterCondition | FilterGroup): unknown {
 
   return {
     field: filter.field,
-    type: filter.type === "contains" ? "=" : filter.type,
+    type: normalizeFilterType(filter.type),
     value: filter.value,
   };
+}
+
+function normalizeFilterType(type: FilterCondition["type"]) {
+  if (type === "contains") {
+    return "=";
+  }
+
+  if (type === ">=" || type === "=>") {
+    return "=>";
+  }
+
+  if (type === "<=" || type === "=<") {
+    return "=<";
+  }
+
+  return type;
+}
+
+function sanitizeSearchFilters(
+  filter: FilterCondition | FilterGroup,
+  supportedFields: ReadonlySet<string>,
+): FilterCondition | FilterGroup | undefined {
+  if ("field" in filter) {
+    return supportedFields.has(filter.field) ? filter : undefined;
+  }
+
+  const conditions = filter.conditions
+    .map((condition) => sanitizeSearchFilters(condition, supportedFields))
+    .filter(Boolean) as Array<FilterCondition | FilterGroup>;
+
+  if (conditions.length === 0) {
+    return undefined;
+  }
+
+  if (conditions.length === 1) {
+    return conditions[0];
+  }
+
+  return {
+    ...filter,
+    conditions,
+  };
+}
+
+function flattenEnrichEntry(entry: Record<string, unknown> | null) {
+  if (!entry) {
+    return [];
+  }
+
+  if (entry.company_data || entry.person_data) {
+    return [entry];
+  }
+
+  if (!Array.isArray(entry.matches)) {
+    return [];
+  }
+
+  const bestMatch = entry.matches
+    .map(asRecord)
+    .filter(Boolean)
+    .sort(
+      (left, right) =>
+        Number(asRecord(right)?.confidence_score ?? 0) -
+        Number(asRecord(left)?.confidence_score ?? 0),
+    )[0];
+
+  if (!bestMatch) {
+    return [];
+  }
+
+  return [
+    {
+      ...bestMatch,
+      matched_on: entry.matched_on ?? bestMatch.matched_on,
+      match_type: entry.match_type ?? bestMatch.match_type,
+    },
+  ];
 }

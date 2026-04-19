@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyPlanStepsToWorkflow, createExecutionBlockerMessage, detectViewType, workflowToPlanSteps } from "@/lib/plan-mode";
+import {
+  applyPlanStepsToWorkflow,
+  createExecutionBlockerMessage,
+  detectViewType,
+  syncWorkflowPlanSteps,
+  workflowToPlanSteps,
+} from "@/lib/plan-mode";
 import { heuristicWorkflowFromPrompt } from "@/lib/workflow/planner";
 import { createThreadStateSnapshot } from "@/lib/workflow/schema";
 import { validateWorkflowSpec } from "@/lib/workflow/validator";
@@ -65,6 +71,22 @@ describe("plan mode helpers", () => {
     expect(executionWorkflow.warnings.join(" ")).toContain("filter step was removed");
   });
 
+  it("does not invent a removed-filter warning for plans that never had filters", () => {
+    const workflow = validateWorkflowSpec(
+      heuristicWorkflowFromPrompt(
+        "Enrich openai.com and stripe.com into a comparison dashboard",
+        createThreadStateSnapshot(),
+        null,
+      ),
+    );
+    const executionWorkflow = applyPlanStepsToWorkflow(
+      workflow,
+      workflowToPlanSteps(workflow),
+    );
+
+    expect(executionWorkflow.warnings.join(" ")).not.toContain("filter step was removed");
+  });
+
   it("breaks detailed company filters into stage and fit steps", () => {
     const latestWorkflow = heuristicWorkflowFromPrompt(
       "Research B2B SaaS companies in India for outbound",
@@ -88,5 +110,23 @@ describe("plan mode helpers", () => {
     expect(filterSteps.map((step) => step.label)).toEqual(
       expect.arrayContaining(["Stage qualification", "ICP fit filter"]),
     );
+  });
+
+  it("removes the analyze step when the follow-up asks to delete the research step", () => {
+    const latestWorkflow = validateWorkflowSpec(
+      heuristicWorkflowFromPrompt(
+        "Research B2B SaaS companies in India for outbound",
+        createThreadStateSnapshot(),
+        null,
+      ),
+    );
+
+    const steps = syncWorkflowPlanSteps(
+      latestWorkflow,
+      "remove the research the shortlist step",
+      workflowToPlanSteps(latestWorkflow),
+    );
+
+    expect(steps.some((step) => step.type === "analyze")).toBe(false);
   });
 });

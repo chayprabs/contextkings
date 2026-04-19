@@ -1,7 +1,6 @@
 import { BriefcaseBusiness, ContactRound, Layers3, Sparkles } from "lucide-react";
 import { EntityCard } from "@/components/EntityCard";
 import { MetricCard } from "@/components/MetricCard";
-import { RecordTable } from "@/components/RecordTable";
 import { SectionCard } from "@/components/SectionCard";
 import type { RunResult } from "@/lib/workflow/schema";
 
@@ -10,40 +9,45 @@ interface CandidateListViewProps {
 }
 
 export function CandidateListView({ run }: CandidateListViewProps) {
-  const firstRecord = run.records[0];
-  const representedCompanies = new Set(
-    run.records.map((record) => String(record.derivedPayload?.company ?? "Unknown")),
-  );
-  const rows = run.records.slice(0, 8).map((record) => [
-    record.inputKey,
-    String(record.derivedPayload?.title ?? "Unknown"),
-    String(record.derivedPayload?.company ?? "Unknown"),
-    String(record.derivedPayload?.score ?? "n/a"),
-  ]);
+  const candidates = run.records.map((record) => ({
+    name: record.inputKey,
+    title: String(record.derivedPayload?.title ?? "Unknown"),
+    company: String(record.derivedPayload?.company ?? "Unknown"),
+    score: String(record.derivedPayload?.score ?? "n/a"),
+    summary: String(record.derivedPayload?.summary ?? "Candidate profile ready for review."),
+    source: record.sourceHint,
+  }));
+  const representedCompanies = new Set(candidates.map((candidate) => candidate.company));
+  const representedTitles = new Set(candidates.map((candidate) => candidate.title));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 md:p-8">
+      <div>
+        <h1 className="text-[2.6rem] font-semibold tracking-[-0.06em] text-foreground">
+          {run.derivedInsights.title}
+        </h1>
+        <p className="mt-2 max-w-3xl text-lg leading-8 text-muted-foreground">
+          {run.derivedInsights.summary}
+        </p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          detail="People enriched and carried through to the candidate shortlist."
           icon={<ContactRound className="h-4 w-4" />}
-          label="Candidates"
+          label="Candidates Found"
           value={run.counts.enriched}
         />
         <MetricCard
-          detail="Current companies represented in the returned candidate pool."
           icon={<BriefcaseBusiness className="h-4 w-4" />}
           label="Companies"
           value={representedCompanies.size}
         />
         <MetricCard
-          detail="Segments generated to help group or prioritize talent."
           icon={<Layers3 className="h-4 w-4" />}
-          label="Segments"
-          value={run.derivedInsights.segments.length}
+          label="Titles"
+          value={representedTitles.size}
         />
         <MetricCard
-          detail="Highlights and recommendations ready for recruiter review."
           icon={<Sparkles className="h-4 w-4" />}
           label="Signals"
           value={
@@ -53,64 +57,31 @@ export function CandidateListView({ run }: CandidateListViewProps) {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <EntityCard
-          badge={run.status}
-          fields={[
-            {
-              label: "Current title",
-              value: String(firstRecord?.derivedPayload?.title ?? "Unknown"),
-            },
-            {
-              label: "Current company",
-              value: String(firstRecord?.derivedPayload?.company ?? "Unknown"),
-            },
-            {
-              label: "Source hint",
-              value: firstRecord?.sourceHint ?? "Unknown",
-            },
-            {
-              label: "Score",
-              value: String(firstRecord?.derivedPayload?.score ?? "n/a"),
-            },
-          ]}
-          subtitle={String(
-            firstRecord?.derivedPayload?.summary ??
-              "The top candidate summary appears here.",
-          )}
-          title={firstRecord?.inputKey ?? "No candidate selected"}
-        />
-
-        <SectionCard
-          description={run.derivedInsights.summary}
-          title="Recruiter notes"
-        >
-          <div className="grid gap-3">
-            {run.derivedInsights.highlights
-              .concat(run.derivedInsights.recommendations)
-              .slice(0, 6)
-              .map((item) => (
-                <div
-                  key={item}
-                  className="rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground"
-                >
-                  {item}
-                </div>
-              ))}
-          </div>
-        </SectionCard>
-      </div>
-
       <SectionCard
-        description="A dense candidate review table for the first records in the run."
-        title="Candidate table"
+        description="Profiles surfaced by the run, using live records instead of the placeholder demo cards."
+        title="Top Candidates"
       >
-        <RecordTable
-          caption="Use this view to scan titles, employers, and derived scores."
-          columns={["Candidate", "Title", "Company", "Score"]}
-          rows={rows}
-        />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {candidates.slice(0, 6).map((candidate) => (
+            <EntityCard
+              key={`${candidate.name}-${candidate.company}`}
+              badge={candidate.score}
+              description={candidate.summary}
+              fields={[
+                { label: "Company", value: candidate.company },
+                { label: "Role", value: candidate.title },
+              ]}
+              tags={dedupeTags([candidate.company, candidate.source, candidate.title])}
+              subtitle={candidate.title}
+              title={candidate.name}
+            />
+          ))}
+        </div>
       </SectionCard>
     </div>
   );
+}
+
+function dedupeTags(tags: string[]) {
+  return [...new Set(tags.filter(Boolean))].slice(0, 3);
 }

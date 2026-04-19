@@ -10,6 +10,12 @@ export const contextKingsCatalog = defineCatalog(schema, {
       }),
       slots: ["default"],
     },
+    Grid: {
+      props: z.object({
+        variant: z.enum(["split", "triptych"]).default("split"),
+      }),
+      slots: ["default"],
+    },
     Header: {
       props: z.object({
         eyebrow: z.string().optional(),
@@ -99,6 +105,47 @@ export const contextKingsCatalog = defineCatalog(schema, {
             value: z.number(),
           }),
         ),
+      }),
+    },
+    AnalyticsDeck: {
+      props: z.object({
+        title: z.string(),
+        summary: z.string(),
+        status: z.string(),
+        headlineLabel: z.string(),
+        headlineValue: z.string(),
+        deltaLabel: z.string(),
+        deltaTone: z.enum(["positive", "neutral", "warning"]),
+        trend: z.array(
+          z.object({
+            label: z.string(),
+            value: z.number(),
+          }),
+        ),
+        progress: z.array(
+          z.object({
+            label: z.string(),
+            value: z.number(),
+            note: z.string(),
+          }),
+        ),
+        distributionTitle: z.string(),
+        distribution: z.array(
+          z.object({
+            label: z.string(),
+            value: z.number(),
+            note: z.string().optional(),
+          }),
+        ),
+        leaderboardTitle: z.string(),
+        leaderboard: z.array(
+          z.object({
+            label: z.string(),
+            value: z.number(),
+            note: z.string().optional(),
+          }),
+        ),
+        notes: z.array(z.string()),
       }),
     },
     CTAGroup: {

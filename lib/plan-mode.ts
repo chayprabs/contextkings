@@ -115,21 +115,39 @@ export function workflowToPlanSteps(
   return steps;
 }
 
+export function syncWorkflowPlanSteps(
+  workflow: WorkflowSpec | ValidatedWorkflowSpec,
+  prompt: string,
+  latestSteps?: WorkflowStep[],
+) {
+  const baseSteps = workflowToPlanSteps(workflow);
+  const syncedSteps = latestSteps?.length
+    ? preserveRemovedStepTypes(baseSteps, latestSteps)
+    : baseSteps;
+
+  return applyPromptStepEdits(
+    prompt,
+    syncedSteps,
+    latestSteps?.length ? latestSteps : syncedSteps,
+  );
+}
+
 export function buildPlanAssistantMessage(
   workflow: ValidatedWorkflowSpec,
   steps: WorkflowStep[],
 ) {
   const filterSteps = steps.filter((step) => step.type === "filter");
+  const assistantNote = selectAssistantNote(workflow);
+  const normalizedAssistantNote = assistantNote?.replace(/[.!?\s]+$/, "");
   const warnings =
     workflow.warnings.length > 0
       ? ` ${workflow.warnings[0]}`
       : "";
-  const assistantNote = selectAssistantNote(workflow);
   const intro = assistantNote?.toLowerCase().includes("follow-up refinement")
     ? "I refined the existing request into"
     : "I mapped this request into";
-  const assumptionSuffix = assistantNote
-    ? ` I also noted ${assistantNote.charAt(0).toLowerCase()}${assistantNote.slice(1)}.`
+  const assumptionSuffix = normalizedAssistantNote
+    ? ` I also noted ${normalizedAssistantNote.charAt(0).toLowerCase()}${normalizedAssistantNote.slice(1)}.`
     : "";
   const filterSuffix =
     filterSteps.length > 1
@@ -226,6 +244,7 @@ export function applyPlanStepsToWorkflow(
 ) {
   const nextWorkflow = structuredClone(workflow);
   const hasFilter = steps.some((step) => step.type === "filter");
+  const originallyHadFilter = shouldIncludeFilterStep(workflow);
 
   if (!hasFilter) {
     delete nextWorkflow.inputs.filters;
@@ -243,7 +262,7 @@ export function applyPlanStepsToWorkflow(
 
   nextWorkflow.warnings = [
     ...nextWorkflow.warnings,
-    ...(hasFilter
+    ...(hasFilter || !originallyHadFilter
       ? []
       : ["The filter step was removed in plan mode, so execution will run without extra narrowing criteria."]),
   ];
@@ -494,7 +513,8 @@ function classifyFilters(filters?: FilterCondition | FilterGroup) {
       if (
         field.includes("funding") ||
         field.includes("headcount") ||
-        field.includes("job_openings")
+        field.includes("job_openings") ||
+        field.includes("hiring")
       ) {
         accumulator.stage.push(condition);
         return accumulator;
@@ -562,6 +582,93 @@ function describeCondition(condition: FilterCondition) {
     default:
       return `${field} ${condition.type} ${normalizedValue}`;
   }
+}
+
+function preserveRemovedStepTypes(
+  baseSteps: WorkflowStep[],
+  latestSteps: WorkflowStep[],
+) {
+  const latestTypes = new Set(latestSteps.map((step) => step.type));
+
+  return baseSteps.filter((step) => {
+    if (!["filter", "enrich", "analyze", "output"].includes(step.type)) {
+      return true;
+    }
+
+    return latestTypes.has(step.type);
+  });
+}
+
+function applyPromptStepEdits(
+  prompt: string,
+  nextSteps: WorkflowStep[],
+  matchSource: WorkflowStep[],
+) {
+  const removals = findRemovedSteps(prompt, matchSource);
+  if (removals.length === 0) {
+    return nextSteps;
+  }
+
+  return nextSteps.filter(
+    (step) => !removals.some((candidate) => isSameStep(candidate, step)),
+  );
+}
+
+function findRemovedSteps(prompt: string, steps: WorkflowStep[]) {
+  const lower = normalizeStepText(prompt);
+  const asksToRemove =
+    lower.includes("remove") ||
+    lower.includes("delete") ||
+    lower.includes("drop") ||
+    lower.includes("without");
+
+  if (!asksToRemove) {
+    return [];
+  }
+
+  const exactMatches = steps.filter((step) =>
+    lower.includes(normalizeStepText(step.label)),
+  );
+  if (exactMatches.length > 0) {
+    return exactMatches;
+  }
+
+  if (
+    lower.includes("research") ||
+    lower.includes("analysis") ||
+    lower.includes("analyze")
+  ) {
+    return steps.filter((step) => step.type === "analyze");
+  }
+
+  if (lower.includes("enrich")) {
+    return steps.filter((step) => step.type === "enrich");
+  }
+
+  if (
+    lower.includes("dashboard") ||
+    lower.includes("report") ||
+    lower.includes("output")
+  ) {
+    return steps.filter((step) => step.type === "output");
+  }
+
+  if (lower.includes("filter")) {
+    return steps.filter((step) => step.type === "filter");
+  }
+
+  return [];
+}
+
+function isSameStep(left: WorkflowStep, right: WorkflowStep) {
+  return (
+    left.type === right.type &&
+    normalizeStepText(left.label) === normalizeStepText(right.label)
+  );
+}
+
+function normalizeStepText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function formatDuration(durationMs: number) {

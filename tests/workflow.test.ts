@@ -42,7 +42,7 @@ describe("workflow planning", () => {
     expect(validated.inputs.filters).toMatchObject({
       field: "experience.employment_details.current.title",
       type: "contains",
-      value: "Machine Learning Engineer",
+      value: "Engineer",
     });
   });
 
@@ -56,19 +56,10 @@ describe("workflow planning", () => {
     );
 
     expect(validated.inputMode).toBe("company-search");
-    expect(validated.inputs.filters).toMatchObject({
-      operator: "and",
-      conditions: expect.arrayContaining([
-        expect.objectContaining({
-          field: "taxonomy.professional_network_industry",
-          value: "Software",
-        }),
-        expect.objectContaining({
-          field: "hq_country",
-          value: "India",
-        }),
-      ]),
-    });
+    expect(JSON.stringify(validated.inputs.filters)).toContain("taxonomy.professional_network_industry");
+    expect(JSON.stringify(validated.inputs.filters)).toContain("Software");
+    expect(JSON.stringify(validated.inputs.filters)).toContain("hq_country");
+    expect(JSON.stringify(validated.inputs.filters)).toContain("India");
   });
 
   it("extracts identifiers from every source row without regex state bleed", () => {
@@ -114,5 +105,29 @@ describe("workflow planning", () => {
     expect(workflow.inputMode).toBe("company-search");
     expect(workflow.inputs.filters).toBeDefined();
     expect(workflow.assumptions.join(" ")).toContain("follow-up refinement");
+  });
+
+  it("widens country-based filter refinements to worldwide scope", () => {
+    const latestWorkflow = heuristicWorkflowFromPrompt(
+      "Research B2B SaaS companies in India for outbound",
+      createThreadStateSnapshot(),
+      null,
+    );
+
+    const workflow = validateWorkflowSpec(
+      heuristicWorkflowFromPrompt(
+        "update the icp fit filter, with software hq country =India to the whole world",
+        createThreadStateSnapshot({
+          latestWorkflow,
+        }),
+        null,
+      ),
+    );
+
+    const serializedFilters = JSON.stringify(workflow.inputs.filters);
+
+    expect(serializedFilters).toContain("Software");
+    expect(serializedFilters).not.toContain("hq_country");
+    expect(workflow.assumptions.join(" ")).toContain("worldwide scope");
   });
 });

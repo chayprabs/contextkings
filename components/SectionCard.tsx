@@ -14,10 +14,10 @@ export function SectionCard({
   children,
 }: SectionCardProps) {
   return (
-    <section className="rounded-[30px] border border-border bg-card p-5 shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:p-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <section className="overflow-hidden rounded-[18px] border border-border bg-card">
+      <div className="flex flex-col gap-4 border-b border-border px-5 py-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h3 className="text-xl font-semibold tracking-[-0.04em] text-foreground">
+          <h3 className="text-[2rem] font-semibold tracking-[-0.05em] text-foreground">
             {title}
           </h3>
           {description ? (
@@ -28,7 +28,7 @@ export function SectionCard({
         </div>
         {actions}
       </div>
-      <div className="mt-5">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }

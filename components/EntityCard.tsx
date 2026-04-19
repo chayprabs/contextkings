@@ -6,25 +6,29 @@ interface EntityField {
 interface EntityCardProps {
   title: string;
   subtitle?: string;
+  description?: string;
   badge?: string;
-  fields: EntityField[];
+  fields?: EntityField[];
+  tags?: string[];
 }
 
 export function EntityCard({
   title,
   subtitle,
+  description,
   badge,
-  fields,
+  fields = [],
+  tags = [],
 }: EntityCardProps) {
   return (
-    <article className="rounded-[30px] border border-border bg-card p-5 shadow-[0_18px_48px_rgba(0,0,0,0.18)]">
+    <article className="rounded-[18px] border border-border bg-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h4 className="text-xl font-semibold tracking-[-0.04em] text-foreground">
             {title}
           </h4>
           {subtitle ? (
-            <p className="mt-2 text-sm leading-7 text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               {subtitle}
             </p>
           ) : null}
@@ -36,21 +40,38 @@ export function EntityCard({
         ) : null}
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {fields.map((field) => (
-          <div
-            key={`${field.label}-${field.value}`}
-            className="rounded-[22px] border border-border bg-background px-4 py-3"
-          >
-            <div className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--accent)]">
-              {field.label}
+      {description ? (
+        <p className="mt-4 text-sm leading-8 text-muted-foreground">{description}</p>
+      ) : null}
+
+      {tags.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-md bg-[#141414] px-2.5 py-1 text-xs font-medium text-foreground"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {fields.length > 0 ? (
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {fields.map((field) => (
+            <div
+              key={`${field.label}-${field.value}`}
+              className="rounded-xl bg-[#111111] px-4 py-3"
+            >
+              <div className="text-xs text-muted-foreground">{field.label}</div>
+              <div className="mt-1 text-xl font-medium tracking-[-0.03em] text-foreground">
+                {field.value}
+              </div>
             </div>
-            <div className="mt-3 text-sm font-medium leading-6 text-foreground">
-              {field.value}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }

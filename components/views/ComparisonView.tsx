@@ -9,69 +9,89 @@ interface ComparisonViewProps {
 }
 
 export function ComparisonView({ run }: ComparisonViewProps) {
-  const rows = run.records.slice(0, 3).map((record) => [
-    record.inputKey,
-    String(record.derivedPayload?.industry ?? record.derivedPayload?.company ?? "Unknown"),
-    String(record.derivedPayload?.headcount ?? record.derivedPayload?.title ?? "n/a"),
-    String(record.derivedPayload?.score ?? "n/a"),
-  ]);
+  const compared = run.records.slice(0, 3).map((record) => ({
+    name: record.inputKey,
+    category: String(
+      record.derivedPayload?.industry ?? record.derivedPayload?.company ?? "Unknown",
+    ),
+    signal: String(
+      record.derivedPayload?.headcount ?? record.derivedPayload?.title ?? "n/a",
+    ),
+    score: String(record.derivedPayload?.score ?? "n/a"),
+  }));
+  const categories = new Set(compared.map((record) => record.category));
+  const matrixRows = [
+    ["Category", ...compared.map((record) => record.category)],
+    ["Signal", ...compared.map((record) => record.signal)],
+    ["Score", ...compared.map((record) => record.score)],
+  ];
+  const takeaways = run.derivedInsights.highlights
+    .concat(run.derivedInsights.recommendations)
+    .slice(0, 6);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 md:p-8">
+      <div>
+        <h1 className="text-[2.6rem] font-semibold tracking-[-0.06em] text-foreground">
+          {run.derivedInsights.title}
+        </h1>
+        <p className="mt-2 max-w-3xl text-lg leading-8 text-muted-foreground">
+          {run.derivedInsights.summary}
+        </p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          detail="Entities placed into the side-by-side comparison."
           icon={<Building2 className="h-4 w-4" />}
           label="Compared"
-          value={run.records.length}
+          value={compared.length}
         />
         <MetricCard
-          detail="Highlights generated to explain the comparison outcome."
-          icon={<Sparkles className="h-4 w-4" />}
-          label="Highlights"
-          value={run.derivedInsights.highlights.length}
+          icon={<ArrowRightLeft className="h-4 w-4" />}
+          label="Categories"
+          value={categories.size}
         />
         <MetricCard
-          detail="Segment buckets available for grouping or slicing."
           icon={<BarChart3 className="h-4 w-4" />}
           label="Segments"
           value={run.derivedInsights.segments.length}
         />
         <MetricCard
-          detail="Warnings attached to this comparison run."
-          icon={<ArrowRightLeft className="h-4 w-4" />}
-          label="Warnings"
-          value={run.warnings.length}
+          icon={<Sparkles className="h-4 w-4" />}
+          label="Highlights"
+          value={run.derivedInsights.highlights.length}
         />
       </div>
 
       <SectionCard
-        description={run.derivedInsights.summary}
-        title="Comparison matrix"
+        description="The side-by-side comparison view from the workflow output."
+        title="Comparison Matrix"
       >
         <RecordTable
-          caption="Showing the key fields surfaced by the comparison workflow."
-          columns={["Entity", "Category", "Signal", "Score"]}
-          rows={rows}
+          columns={["Metric", ...compared.map((record) => record.name)]}
+          rows={matrixRows}
         />
       </SectionCard>
 
       <SectionCard
-        description="The analysis step turned the shortlist into plain-language takeaways."
+        description="Plain-language takeaways distilled from the comparison run."
         title="Takeaways"
       >
         <div className="grid gap-3 lg:grid-cols-2">
-          {run.derivedInsights.highlights
-            .concat(run.derivedInsights.recommendations)
-            .slice(0, 6)
-            .map((item) => (
+          {takeaways.length > 0 ? (
+            takeaways.map((item) => (
               <div
                 key={item}
-                className="rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground"
+                className="rounded-[16px] border border-border bg-[#111111] px-4 py-4 text-sm leading-7 text-foreground"
               >
                 {item}
               </div>
-            ))}
+            ))
+          ) : (
+            <div className="rounded-[16px] border border-border bg-[#111111] px-4 py-4 text-sm leading-7 text-muted-foreground">
+              No comparison takeaways were generated for this run.
+            </div>
+          )}
         </div>
       </SectionCard>
     </div>

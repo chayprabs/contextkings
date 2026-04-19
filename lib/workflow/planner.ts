@@ -10,6 +10,31 @@ import {
   type WorkflowSpec,
 } from "@/lib/workflow/schema";
 
+type UseCaseSkillMatch = {
+  skill: {
+    slug: string;
+    name: string;
+    routeProfile: {
+      defaultEntityType?: Extract<WorkflowSpec["entityType"], "company" | "person">;
+      defaultUiIntent?: WorkflowSpec["uiIntent"];
+      defaultLlmTask?: WorkflowSpec["llmTask"];
+      preferEnrichment?: boolean;
+      preferSearch?: boolean;
+    };
+  };
+} | null;
+
+function matchUseCaseSkill(
+  _prompt?: string,
+  _sourceContext?: SourceContext | null,
+) {
+  return null as UseCaseSkillMatch;
+}
+
+function buildUseCaseSkillContext(_match?: UseCaseSkillMatch) {
+  return null;
+}
+
 const DOMAIN_REGEX = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b/gi;
 const LINKEDIN_REGEX = /https?:\/\/(?:www\.)?linkedin\.com\/[^\s,]+/gi;
 const EMAIL_REGEX = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -51,6 +76,22 @@ export async function draftWorkflowFromPrompt(
 ) {
   const fallback = heuristicWorkflowFromPrompt(prompt, threadState, sourceContext);
   const apiKey = process.env.OPENAI_API_KEY;
+  const resolvedSourceContext = sourceContext ?? threadState.sourceContext ?? null;
+  const skillMatch = matchUseCaseSkill(prompt, resolvedSourceContext);
+  const skillContext = buildUseCaseSkillContext(skillMatch);
+
+  if (threadState.latestWorkflow && shouldTreatAsRefinement(prompt)) {
+    return normalizeWorkflow(
+      refineWorkflowFromPrompt(
+        prompt,
+        threadState.latestWorkflow,
+        resolvedSourceContext,
+      ),
+      `${threadState.latestWorkflow.goal}\n${prompt}`.trim(),
+      resolvedSourceContext,
+      false,
+    );
+  }
 
   if (!apiKey) {
     return fallback;
@@ -72,16 +113,31 @@ export async function draftWorkflowFromPrompt(
         "If the user mentions unsupported live data sources, rewrite them into the closest supported flow and record that rewrite in assumptions.",
         "Prefer company/person enrich when identifiers are present and search when the request is exploratory.",
         "Use concise warnings for plan limits, missing identifiers, or rate-limit risks.",
+        "If a use-case skill context is provided, follow its default mapping, translation rules, and return-shape guidance unless the user explicitly overrides them.",
       ].join(" "),
       prompt: [
         `User prompt:\n${prompt}`,
+        skillContext ? `Use-case skill context:\n${skillContext}` : null,
         `Latest workflow context:\n${JSON.stringify(threadState.latestWorkflow, null, 2)}`,
         `Latest run summary:\n${JSON.stringify(threadState.latestRun?.derivedInsights ?? null, null, 2)}`,
-        `Local source context:\n${JSON.stringify(sourceContext ?? threadState.sourceContext, null, 2)}`,
-      ].join("\n\n"),
+        `Local source context:\n${JSON.stringify(resolvedSourceContext, null, 2)}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     });
 
-    return normalizeWorkflow(result.object, prompt, sourceContext ?? threadState.sourceContext, true);
+    return normalizeWorkflow(
+      applyUseCaseSkillGuidance(
+        result.object,
+        prompt,
+        resolvedSourceContext,
+        skillMatch,
+      ),
+      prompt,
+      resolvedSourceContext,
+      true,
+      skillMatch,
+    );
   } catch {
     return fallback;
   }
@@ -105,47 +161,53 @@ export function heuristicWorkflowFromPrompt(
   threadState: ThreadState,
   sourceContext?: SourceContext | null,
 ): WorkflowSpec {
+  const resolvedSourceContext = sourceContext ?? threadState.sourceContext ?? null;
   const previousWorkflow = threadState.latestWorkflow;
   if (previousWorkflow && shouldTreatAsRefinement(prompt)) {
     return normalizeWorkflow(
       refineWorkflowFromPrompt(
         prompt,
         previousWorkflow,
-        sourceContext ?? threadState.sourceContext ?? null,
+        resolvedSourceContext,
       ),
       `${previousWorkflow.goal}\n${prompt}`.trim(),
-      sourceContext,
+      resolvedSourceContext,
       false,
     );
   }
 
-  const inferredInputMode = inferInputMode(prompt, sourceContext);
-  const inferredEntityType = inferEntityType(prompt, sourceContext);
+  const skillMatch = matchUseCaseSkill(prompt, resolvedSourceContext);
+  const inferredInputMode = inferInputMode(prompt, resolvedSourceContext);
+  const inferredEntityType = inferEntityType(prompt, resolvedSourceContext);
 
   return normalizeWorkflow(
-    {
+    applyUseCaseSkillGuidance({
       goal: prompt.trim(),
       inputMode: inferredInputMode,
       entityType: inferredEntityType,
-      sourceHints: inferSourceHints(prompt, sourceContext),
-      crustPlan: inferCrustPlan(prompt, sourceContext),
+      sourceHints: inferSourceHints(prompt, resolvedSourceContext),
+      crustPlan: inferCrustPlan(prompt, resolvedSourceContext),
       llmTask: inferLlmTask(prompt),
       uiIntent: inferUiIntent(prompt),
-      assumptions: inferAssumptions(prompt, threadState, sourceContext),
-      warnings: inferWarnings(prompt, sourceContext),
+      assumptions: inferAssumptions(prompt, threadState, resolvedSourceContext),
+      warnings: inferWarnings(prompt, resolvedSourceContext),
       inputs: {
         limit: inferLimit(prompt),
         filters: inferFilters(prompt, inferredEntityType, inferredInputMode),
-        identifiers: extractIdentifiers(prompt, sourceContext),
-        manualEntries: extractManualEntries(sourceContext),
-        sourceColumns: sourceContext?.records.length
-          ? Object.keys(sourceContext.records[0] ?? {})
+        identifiers: extractIdentifiers(prompt, resolvedSourceContext),
+        manualEntries: extractManualEntries(resolvedSourceContext),
+        sourceColumns: resolvedSourceContext?.records.length
+          ? Object.keys(resolvedSourceContext.records[0] ?? {})
           : [],
       },
     },
     prompt,
-    sourceContext,
+    resolvedSourceContext,
+    skillMatch),
+    prompt,
+    resolvedSourceContext,
     false,
+    skillMatch,
   );
 }
 
@@ -154,10 +216,12 @@ function normalizeWorkflow(
   prompt: string,
   sourceContext?: SourceContext | null,
   includeGeneratedMarker?: boolean,
+  skillMatch?: UseCaseSkillMatch | null,
 ) {
   const normalized = workflowSpecSchema.parse(candidate);
   const assumptions = [...normalized.assumptions];
   const warnings = [...normalized.warnings];
+  const resolvedSkillMatch = skillMatch ?? matchUseCaseSkill(prompt, sourceContext);
 
   assumptions.unshift(
     includeGeneratedMarker
@@ -173,15 +237,142 @@ function normalizeWorkflow(
     assumptions.push("CSV rows are treated as a bootstrap source and only enriched when usable identifiers are present.");
   }
 
+  if (resolvedSkillMatch) {
+    assumptions.push(
+      `Matched prompt to use-case skill "${resolvedSkillMatch.skill.slug}" from use-case-skills/${resolvedSkillMatch.skill.slug}/SKILL.md.`,
+    );
+  }
+
   if (normalized.inputs.identifiers.length === 0 && sourceContext?.records.length === 0) {
     warnings.push("No direct identifiers were found, so search or mock execution may be used.");
   }
 
   return workflowSpecSchema.parse({
     ...normalized,
+    sourceHints: dedupe(normalized.sourceHints),
     assumptions: dedupe(assumptions),
     warnings: dedupe(warnings),
   });
+}
+
+function applyUseCaseSkillGuidance(
+  workflow: WorkflowSpec,
+  prompt: string,
+  sourceContext: SourceContext | null | undefined,
+  skillMatch: UseCaseSkillMatch | null,
+) {
+  if (!skillMatch) {
+    return workflow;
+  }
+
+  const nextWorkflow = structuredClone(workflow);
+  const lower = prompt.toLowerCase();
+  const hasDirectInputs =
+    nextWorkflow.inputs.identifiers.length > 0 ||
+    nextWorkflow.inputs.manualEntries.length > 0;
+  const hasBootstrapRows = Boolean(sourceContext?.records.length);
+  const {
+    defaultEntityType,
+    defaultLlmTask,
+    defaultUiIntent,
+    preferEnrichment,
+    preferSearch,
+  } = skillMatch.skill.routeProfile;
+
+  if (defaultEntityType && nextWorkflow.entityType !== "web-document") {
+    const promptMentionsPeople = containsRoutingLanguage(lower, PERSON_ROUTING_TERMS);
+    const promptMentionsCompanies = containsRoutingLanguage(lower, COMPANY_ROUTING_TERMS);
+
+    if (defaultEntityType === "person" && !promptMentionsCompanies) {
+      nextWorkflow.entityType = "person";
+    }
+
+    if (defaultEntityType === "company" && !promptMentionsPeople) {
+      nextWorkflow.entityType = "company";
+    }
+  }
+
+  if (
+    preferEnrichment &&
+    (hasDirectInputs || hasBootstrapRows) &&
+    (nextWorkflow.entityType === "company" || nextWorkflow.entityType === "person")
+  ) {
+    nextWorkflow.inputMode = sourceContext?.kind === "csv" ? "csv" : "manual-list";
+    nextWorkflow.crustPlan = buildDirectEnrichPlan(nextWorkflow.entityType);
+  } else if (
+    preferSearch &&
+    !hasDirectInputs &&
+    !hasBootstrapRows &&
+    (nextWorkflow.entityType === "company" || nextWorkflow.entityType === "person")
+  ) {
+    nextWorkflow.inputMode =
+      nextWorkflow.entityType === "person" ? "person-search" : "company-search";
+    nextWorkflow.crustPlan = inferCrustPlan(prompt, sourceContext);
+  }
+
+  if (!hasExplicitTaskLanguage(lower) && defaultLlmTask) {
+    nextWorkflow.llmTask = defaultLlmTask;
+  }
+
+  if (!hasExplicitUiLanguage(lower) && defaultUiIntent) {
+    nextWorkflow.uiIntent = defaultUiIntent;
+  }
+
+  nextWorkflow.sourceHints = dedupe([
+    ...nextWorkflow.sourceHints,
+    humanizeUseCaseSkillName(skillMatch.skill.name),
+  ]);
+
+  return nextWorkflow;
+}
+
+function buildDirectEnrichPlan(entityType: "company" | "person") {
+  return [
+    {
+      step: `${entityType}-enrich`,
+      endpoint: `/${entityType}/enrich`,
+      reason: "Matched use-case skill favored direct enrichment because usable bootstrap records are already present.",
+    },
+    {
+      step: "llm-derive",
+      reason: "Summarize and score the enriched dataset for the requested outcome.",
+    },
+  ];
+}
+
+function hasExplicitTaskLanguage(prompt: string) {
+  return [
+    "score",
+    "rank",
+    "classify",
+    "cluster",
+    "outreach",
+    "signal",
+    "research",
+    "summarize",
+  ].some((needle) => prompt.includes(needle));
+}
+
+function hasExplicitUiLanguage(prompt: string) {
+  return [
+    "report",
+    "table",
+    "card",
+    "compare",
+    "comparison",
+    "list",
+    "dashboard",
+  ].some((needle) => prompt.includes(needle));
+}
+
+function containsRoutingLanguage(prompt: string, phrases: readonly string[]) {
+  return phrases.some((phrase) => prompt.includes(phrase));
+}
+
+function humanizeUseCaseSkillName(value: string) {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function inferInputMode(prompt: string, sourceContext?: SourceContext | null): WorkflowSpec["inputMode"] {
@@ -450,7 +641,7 @@ function inferFilters(
     const stage = findFirstMatch(lower, FUNDING_STAGE_KEYWORDS);
     if (stage) {
       conditions.push({
-        field: "funding.last_funding_round_type",
+        field: "funding.last_round_type",
         type: "=",
         value: stage,
       });
@@ -477,7 +668,7 @@ function inferFilters(
       lower.includes("open roles")
     ) {
       conditions.push({
-        field: "job_openings.job_openings_count",
+        field: "hiring.openings_count",
         type: ">=",
         value: 1,
       });
@@ -524,23 +715,29 @@ function refineWorkflowFromPrompt(
   sourceContext?: SourceContext | null,
 ): WorkflowSpec {
   const combinedPrompt = `${previousWorkflow.goal}\n${prompt}`.trim();
+  const skillMatch = matchUseCaseSkill(combinedPrompt, sourceContext);
   const lower = prompt.toLowerCase();
   const refinedInputMode =
     previousWorkflow.entityType === "person" ? "person-search" : "company-search";
-  const inferredFilters = inferFilters(
-    combinedPrompt,
-    previousWorkflow.entityType,
-    refinedInputMode,
-  );
-  const wantsDetailedFilters =
+  const requestsFilterBreakdown =
+    lower.includes("detailed") ||
+    lower.includes("detail") ||
+    lower.includes("breakdown") ||
+    lower.includes("split");
+  const touchesFilters =
     lower.includes("filter") ||
     lower.includes("filters") ||
     lower.includes("stage") ||
     lower.includes("fit") ||
-    lower.includes("shortlist");
+    lower.includes("shortlist") ||
+    lower.includes("country") ||
+    lower.includes("world") ||
+    lower.includes("worldwide") ||
+    lower.includes("global");
   const nextWorkflow = structuredClone(previousWorkflow);
+  const refinementSummary = buildRefinementSummary(prompt);
 
-  nextWorkflow.goal = wantsDetailedFilters
+  nextWorkflow.goal = requestsFilterBreakdown
     ? `${previousWorkflow.goal} with a more detailed stage-and-fit filter sequence`
     : `${previousWorkflow.goal} (${prompt.trim()})`;
   nextWorkflow.sourceHints = dedupe([
@@ -549,7 +746,7 @@ function refineWorkflowFromPrompt(
   ]);
   nextWorkflow.assumptions = dedupe([
     ...previousWorkflow.assumptions,
-    "Follow-up refinement requested a more detailed stage-and-fit filter breakdown.",
+    refinementSummary,
     `Applied follow-up refinement: ${prompt.trim()}.`,
   ]);
   nextWorkflow.warnings = dedupe([
@@ -557,7 +754,7 @@ function refineWorkflowFromPrompt(
     ...inferWarnings(combinedPrompt, sourceContext),
   ]);
 
-  if (wantsDetailedFilters && previousWorkflow.entityType !== "web-document") {
+  if (touchesFilters && previousWorkflow.entityType !== "web-document") {
     nextWorkflow.inputMode = refinedInputMode;
     nextWorkflow.crustPlan = inferCrustPlan(combinedPrompt, sourceContext);
   }
@@ -586,8 +783,13 @@ function refineWorkflowFromPrompt(
   nextWorkflow.inputs = {
     ...previousWorkflow.inputs,
     limit: /\b\d{1,2}\b/.test(prompt) ? inferLimit(combinedPrompt) : previousWorkflow.inputs.limit,
-    filters: wantsDetailedFilters
-      ? mergeFilters(previousWorkflow.inputs.filters, inferredFilters)
+    filters: touchesFilters
+      ? refineFiltersFromPrompt(
+          prompt,
+          previousWorkflow.inputs.filters,
+          previousWorkflow.entityType,
+          refinedInputMode,
+        )
       : previousWorkflow.inputs.filters,
     identifiers: dedupe([
       ...previousWorkflow.inputs.identifiers,
@@ -602,7 +804,12 @@ function refineWorkflowFromPrompt(
       : previousWorkflow.inputs.sourceColumns,
   };
 
-  return nextWorkflow;
+  return applyUseCaseSkillGuidance(
+    nextWorkflow,
+    combinedPrompt,
+    sourceContext,
+    skillMatch,
+  );
 }
 
 function mergeFilters(
@@ -627,6 +834,123 @@ function mergeFilters(
     operator: "and",
     conditions: deduped,
   } satisfies FilterGroup;
+}
+
+function refineFiltersFromPrompt(
+  prompt: string,
+  previousFilters: FilterCondition | FilterGroup | undefined,
+  entityType: WorkflowSpec["entityType"],
+  inputMode: WorkflowSpec["inputMode"],
+) {
+  let nextFilters = previousFilters;
+  const inferredFilters = inferFilters(prompt, entityType, inputMode);
+  const lower = prompt.toLowerCase();
+
+  if (inferredFilters) {
+    nextFilters = mergeFilters(nextFilters, inferredFilters);
+  }
+
+  if (mentionsWorldwideScope(lower)) {
+    return stripFilters(nextFilters, (condition) => isGeographyField(condition.field));
+  }
+
+  const explicitCountry = entityType === "company" ? findLastCountryMatch(lower) : null;
+  if (explicitCountry) {
+    const withoutGeography = stripFilters(
+      nextFilters,
+      (condition) => isGeographyField(condition.field),
+    );
+
+    return mergeFilters(withoutGeography, {
+      field: "hq_country",
+      type: "=",
+      value: explicitCountry,
+    });
+  }
+
+  return nextFilters;
+}
+
+function stripFilters(
+  filters: FilterCondition | FilterGroup | undefined,
+  predicate: (condition: FilterCondition) => boolean,
+): FilterCondition | FilterGroup | undefined {
+  if (!filters) {
+    return undefined;
+  }
+
+  if ("field" in filters) {
+    return predicate(filters) ? undefined : filters;
+  }
+
+  const nextConditions = filters.conditions
+    .map((condition) => stripFilters(condition, predicate))
+    .filter(Boolean) as Array<FilterCondition | FilterGroup>;
+
+  if (nextConditions.length === 0) {
+    return undefined;
+  }
+
+  if (nextConditions.length === 1) {
+    return nextConditions[0];
+  }
+
+  return {
+    ...filters,
+    conditions: nextConditions,
+  };
+}
+
+function isGeographyField(field: string) {
+  const lower = field.toLowerCase();
+  return lower.includes("country") || lower.includes("location");
+}
+
+function mentionsWorldwideScope(input: string) {
+  return (
+    input.includes("whole world") ||
+    input.includes("worldwide") ||
+    input.includes("global") ||
+    input.includes("all countries")
+  );
+}
+
+function findLastCountryMatch(input: string) {
+  const matches = Object.entries(COUNTRY_KEYWORDS)
+    .map(([needle, value]) => ({
+      index: input.lastIndexOf(needle),
+      value,
+    }))
+    .filter((match) => match.index >= 0)
+    .sort((left, right) => right.index - left.index);
+
+  return matches[0]?.value ?? null;
+}
+
+function buildRefinementSummary(prompt: string) {
+  const lower = prompt.toLowerCase();
+
+  if (
+    lower.includes("detailed") ||
+    lower.includes("detail") ||
+    lower.includes("breakdown") ||
+    lower.includes("split")
+  ) {
+    return "Follow-up refinement requested a more detailed stage-and-fit filter breakdown.";
+  }
+
+  if (mentionsWorldwideScope(lower)) {
+    return "Follow-up refinement widened the geography filter to worldwide scope.";
+  }
+
+  if (
+    (lower.includes("remove") || lower.includes("delete")) &&
+    (lower.includes("research") || lower.includes("analy"))
+  ) {
+    return "Follow-up refinement removed the research step from the visible workflow plan.";
+  }
+
+  return "Follow-up refinement updated the existing workflow.";
 }
 
 function inferLimit(prompt: string) {
@@ -691,6 +1015,32 @@ function mentionsUnsupportedSource(prompt: string) {
 function dedupe(values: string[]) {
   return [...new Set(values)];
 }
+
+const PERSON_ROUTING_TERMS = [
+  "candidate",
+  "candidates",
+  "people",
+  "person",
+  "talent",
+  "recruit",
+  "recruiting",
+  "hiring",
+  "linkedin profile",
+  "profile urls",
+] as const;
+
+const COMPANY_ROUTING_TERMS = [
+  "company",
+  "companies",
+  "startup",
+  "startups",
+  "accounts",
+  "account",
+  "prospect",
+  "prospects",
+  "portfolio",
+  "watchlist",
+] as const;
 
 function containsPattern(value: string, pattern: RegExp) {
   return new RegExp(pattern.source, pattern.flags.replace("g", "")).test(value);
@@ -760,9 +1110,9 @@ const INDUSTRY_KEYWORDS = {
 } as const;
 
 const PERSON_TITLE_KEYWORDS = {
-  "machine learning": "Machine Learning Engineer",
-  "ml ": "Machine Learning Engineer",
-  " ai ": "AI Engineer",
+  "machine learning": "Engineer",
+  "ml ": "Engineer",
+  " ai ": "Engineer",
   engineer: "Engineer",
   engineering: "Engineer",
   founder: "Founder",

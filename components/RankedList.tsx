@@ -14,9 +14,9 @@ export function RankedList({ items }: RankedListProps) {
       {items.map((item, index) => (
         <div
           key={`${item.label}-${index}`}
-          className="flex items-start gap-4 rounded-[24px] border border-border bg-background px-4 py-4"
+          className="flex items-start gap-4 rounded-[16px] border border-border bg-[#111111] px-4 py-4"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-card text-sm font-semibold text-foreground">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-sm font-semibold text-foreground">
             {index + 1}
           </div>
           <div className="min-w-0 flex-1">

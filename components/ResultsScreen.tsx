@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { Spec } from "@json-render/core";
-import { JSONUIProvider, Renderer } from "@json-render/react";
+import { useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   BarChart3,
   Bookmark,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Database,
   Download,
@@ -16,15 +16,14 @@ import {
   Filter,
   Layers,
   Share2,
+  Sparkles,
   X,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
-import { CompanyResearchView } from "@/components/views/CompanyResearchView";
 import { CandidateListView } from "@/components/views/CandidateListView";
+import { CompanyResearchView } from "@/components/views/CompanyResearchView";
 import { ComparisonView } from "@/components/views/ComparisonView";
 import { exportRunAsCsv, exportRunAsJson } from "@/lib/persistence/repository";
-import { registry } from "@/lib/ui/registry";
-import { buildFallbackRunSpec } from "@/lib/ui/specs";
 import type { ExecutionResponse, WorkflowStep } from "@/lib/plan-mode";
 
 interface ResultsScreenProps {
@@ -34,23 +33,15 @@ interface ResultsScreenProps {
   steps: WorkflowStep[];
 }
 
-export function ResultsScreen({
-  onBack,
-  onSaveRun,
-  result,
-  steps,
-}: ResultsScreenProps) {
+export function ResultsScreen(props: ResultsScreenProps) {
+  const { onBack, onSaveRun, result, steps } = props;
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [refineInput, setRefineInput] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+  const [lastRefine, setLastRefine] = useState("");
   const { run, metadata, viewType } = result;
-  const suggestedTitle = useMemo(
-    () => run.derivedInsights.title || `Saved run ${new Date().toLocaleTimeString()}`,
-    [run.derivedInsights.title],
-  );
-  const canvasSpec = useMemo(
-    () => (isSpec(run.uiModel) ? run.uiModel : buildFallbackRunSpec(run)),
-    [run],
-  );
+  const suggestedTitle = run.derivedInsights.title || `Saved run ${new Date().toLocaleTimeString()}`;
 
   async function handleShare() {
     const text = `${run.derivedInsights.title}\n\n${run.derivedInsights.summary}`;
@@ -82,8 +73,22 @@ export function ResultsScreen({
     URL.revokeObjectURL(url);
   }
 
+  function handleRefineSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!refineInput.trim()) {
+      return;
+    }
+
+    setLastRefine(refineInput.trim());
+    setRefineInput("");
+    setIsRefining(true);
+    window.setTimeout(() => {
+      setIsRefining(false);
+    }, 1400);
+  }
+
   return (
-    <section className="min-h-screen bg-background text-foreground">
+    <section className="flex min-h-screen flex-col bg-background text-foreground">
       <AppHeader
         hideTitle
         leftContent={
@@ -96,7 +101,7 @@ export function ResultsScreen({
               <ArrowLeft className="h-4 w-4" />
             </button>
             <div className="h-5 w-px bg-border" />
-            <div className="inline-flex items-center gap-2 text-sm">
+            <div className="inline-flex items-center gap-2 text-sm text-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-400" />
               Run complete
             </div>
@@ -104,7 +109,7 @@ export function ResultsScreen({
             <div className="hidden items-center gap-4 md:flex">
               <div className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                 <Database className="h-3.5 w-3.5" />
-                {metadata.records} {metadata.entity}
+                {metadata.records} {metadata.entity.toLowerCase()}
               </div>
               <div className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                 <Clock3 className="h-3.5 w-3.5" />
@@ -116,14 +121,15 @@ export function ResultsScreen({
         rightContent={
           <>
             <button
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground transition hover:text-foreground"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-foreground transition hover:bg-card"
               onClick={() => setPipelineOpen(true)}
               type="button"
             >
               Pipeline
+              <ChevronDown className="h-4 w-4" />
             </button>
             <button
-              className="inline-flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm text-muted-foreground transition hover:bg-card hover:text-foreground"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-foreground transition hover:bg-card"
               onClick={() => {
                 void handleShare();
               }}
@@ -141,7 +147,7 @@ export function ResultsScreen({
               Export
             </button>
             <button
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground transition hover:text-foreground"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-foreground transition hover:bg-card"
               onClick={() => setSaveDialogOpen(true)}
               type="button"
             >
@@ -151,40 +157,61 @@ export function ResultsScreen({
         }
       />
 
-      <div className="app-frame w-full px-4 py-6 md:px-6 md:py-7">
-        <section className="shell-panel mb-7 overflow-hidden rounded-[34px] p-4 md:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <div className="thin-label text-[var(--accent)]">
-                Generated app canvas
-              </div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-foreground md:text-[2.1rem]">
-                Structured workspace
-              </h2>
-            </div>
-            <div className="rounded-full border border-border bg-background/30 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-              {run.status}
-            </div>
-          </div>
-
-          <div className="canvas-panel overflow-hidden rounded-[30px] p-4 md:p-7">
-            <div className="mx-auto w-full max-w-[92rem]">
-              <JSONUIProvider handlers={{}} initialState={{}} registry={registry}>
-                <Renderer loading={false} registry={registry} spec={canvasSpec} />
-              </JSONUIProvider>
-            </div>
-          </div>
-        </section>
-
-        <div className="shell-panel rounded-[34px] p-4 md:p-6">
-          {viewType === "candidate-list" ? (
-            <CandidateListView run={run} />
-          ) : viewType === "comparison" ? (
-            <ComparisonView run={run} />
-          ) : (
-            <CompanyResearchView run={run} />
-          )}
+      {isRefining ? (
+        <div className="relative h-0.5 overflow-hidden bg-border">
+          <div className="absolute inset-y-0 left-0 w-1/3 animate-[refineSlide_1.2s_ease-in-out_infinite] bg-white" />
         </div>
+      ) : null}
+
+      <div className="relative flex-1 overflow-auto pb-28">
+        {viewType === "candidate-list" ? (
+          <CandidateListView run={run} />
+        ) : viewType === "comparison" ? (
+          <ComparisonView run={run} />
+        ) : (
+          <CompanyResearchView run={run} />
+        )}
+      </div>
+
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 flex justify-center px-6 pb-5">
+        <form
+          className="pointer-events-auto w-full max-w-2xl"
+          onSubmit={handleRefineSubmit}
+        >
+          {lastRefine && !isRefining ? (
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <Sparkles className="h-3 w-3 text-white/70" />
+              <span className="text-[11px] text-muted-foreground">
+                Applied: {lastRefine}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="relative overflow-hidden rounded-[22px] border border-white/10 bg-white/5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+            <div className="absolute left-1/2 top-0 h-px w-2/3 -translate-x-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Sparkles className={`h-4 w-4 ${isRefining ? "animate-pulse text-white/70" : "text-white/30"}`} />
+              <input
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                disabled={isRefining}
+                onChange={(event) => setRefineInput(event.target.value)}
+                placeholder={
+                  isRefining
+                    ? "Updating results..."
+                    : 'Refine results — e.g. "only Series B companies"'
+                }
+                value={refineInput}
+              />
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/15 disabled:opacity-20"
+                disabled={!refineInput.trim() || isRefining}
+                type="submit"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
 
       <PipelinePanel
@@ -206,6 +233,17 @@ export function ResultsScreen({
         records={metadata.records}
         stepCount={steps.length}
       />
+
+      <style jsx global>{`
+        @keyframes refineSlide {
+          0% {
+            transform: translateX(-120%);
+          }
+          100% {
+            transform: translateX(420%);
+          }
+        }
+      `}</style>
     </section>
   );
 }
@@ -232,18 +270,18 @@ function PipelinePanel({
         onClick={onClose}
       />
       <aside
-        className={`fixed right-0 top-0 z-50 h-full w-full max-w-[400px] border-l border-border bg-[#0d0d0d] transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-50 h-full w-full max-w-[400px] border-l border-border bg-[#090909] transition-transform duration-300 ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <div className="flex h-full flex-col">
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-5">
             <div>
-              <div className="text-lg font-semibold tracking-[-0.03em]">
+              <div className="text-[2rem] font-semibold tracking-[-0.04em] text-foreground">
                 Pipeline details
               </div>
               <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                {steps.length} steps
+                {steps.length} steps · all completed
               </div>
             </div>
             <button
@@ -255,31 +293,41 @@ function PipelinePanel({
             </button>
           </div>
 
-          <div className="relative flex-1 overflow-y-auto px-5 py-5">
-            {steps.length > 1 ? (
-              <div className="absolute left-[44px] top-[44px] h-[calc(100%-88px)] w-px bg-border" />
-            ) : null}
+          <div className="flex-1 overflow-y-auto px-5 py-5">
             <div className="space-y-2">
-              {steps.map((step) => (
-                <div
-                  key={step.id}
-                  className="relative flex items-start gap-4 rounded-[22px] border border-white/6 bg-white/[0.02] px-3 py-3"
-                >
-                  <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-xl border ${stepColorClass(step.type)}`}>
-                    <StepIcon type={step.type} />
+              {steps.map((step, index) => (
+                <div key={step.id}>
+                  <div className="flex items-start gap-4 rounded-[20px] border border-border bg-card/70 px-4 py-4">
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${stepColorClass(step.type)}`}
+                    >
+                      <StepIcon type={step.type} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="text-xl font-medium tracking-[-0.03em] text-foreground">
+                          {step.label}
+                        </div>
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                      </div>
+                      <div className="mt-1 text-sm leading-6 text-muted-foreground">
+                        {step.description}
+                      </div>
+                      <div className="mt-2 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                        {step.type}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="text-sm font-medium">{step.label}</div>
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+
+                  {index < steps.length - 1 ? (
+                    <div className="flex justify-center py-1">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div className="h-1.5 w-px bg-border" />
+                        <div className="h-1 w-1 rounded-full bg-border" />
+                        <div className="h-1.5 w-px bg-border" />
+                      </div>
                     </div>
-                    <div className="mt-1 text-sm leading-6 text-muted-foreground">
-                      {step.description}
-                    </div>
-                    <div className="mt-2 font-mono text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-                      {step.type}
-                    </div>
-                  </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -288,7 +336,7 @@ function PipelinePanel({
           <div className="border-t border-border px-5 py-4">
             <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
               <span>{records} records processed</span>
-              <span>{duration}</span>
+              <span>{duration} total</span>
             </div>
           </div>
         </div>
@@ -317,13 +365,13 @@ function SaveRunDialog({
   }
 
   return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[30px] border border-border bg-[#0d0d0d] p-6 shadow-2xl shadow-black/40">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[26px] border border-border bg-[#090909] p-6 shadow-2xl shadow-black/40">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-300">
           <AlertTriangle className="h-5 w-5" />
         </div>
 
-        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.05em]">
+        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-foreground">
           Save this run?
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -331,25 +379,25 @@ function SaveRunDialog({
         </p>
 
         <div className="mt-5 rounded-2xl border border-border bg-card p-4">
-          <div className="grid grid-cols-3 gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          <div className="grid grid-cols-3 gap-3 text-sm text-muted-foreground">
             <div>
               <div>Records</div>
-              <div className="mt-2 text-sm text-foreground">{records}</div>
+              <div className="mt-2 text-xl font-medium text-foreground">{records}</div>
             </div>
             <div>
               <div>Duration</div>
-              <div className="mt-2 text-sm text-foreground">{duration}</div>
+              <div className="mt-2 text-xl font-medium text-foreground">{duration}</div>
             </div>
             <div>
               <div>Steps</div>
-              <div className="mt-2 text-sm text-foreground">{stepCount}</div>
+              <div className="mt-2 text-xl font-medium text-foreground">{stepCount}</div>
             </div>
           </div>
         </div>
 
         <div className="mt-6 flex gap-3">
           <button
-            className="flex-1 rounded-xl border border-border px-4 py-3 text-sm transition hover:text-foreground"
+            className="flex-1 rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground transition hover:text-foreground"
             onClick={onDiscard}
             type="button"
           >
@@ -387,23 +435,14 @@ function StepIcon({ type }: { type: WorkflowStep["type"] }) {
 function stepColorClass(type: WorkflowStep["type"]) {
   switch (type) {
     case "source":
-      return "border-blue-500/30 bg-blue-500/10 text-blue-300";
+      return "border-blue-500/25 bg-blue-500/12 text-blue-300";
     case "filter":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+      return "border-amber-500/25 bg-amber-500/12 text-amber-300";
     case "enrich":
-      return "border-violet-500/30 bg-violet-500/10 text-violet-300";
+      return "border-violet-500/25 bg-violet-500/12 text-violet-300";
     case "analyze":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+      return "border-emerald-500/25 bg-emerald-500/12 text-emerald-300";
     case "output":
-      return "border-pink-500/30 bg-pink-500/10 text-pink-300";
+      return "border-pink-500/25 bg-pink-500/12 text-pink-300";
   }
-}
-
-function isSpec(value: unknown): value is Spec {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      "root" in value &&
-      "elements" in value,
-  );
 }

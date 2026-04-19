@@ -149,8 +149,8 @@ export function BuildingScreen({
     <section className="min-h-screen bg-background text-foreground">
       <AppHeader />
 
-      <div className="app-frame flex min-h-[calc(100svh-3.5rem)] flex-col items-center justify-center px-6 py-12">
-        <div className="shell-panel w-full max-w-2xl rounded-[34px] px-6 py-8 md:px-8 md:py-9">
+      <div className="flex min-h-[calc(100svh-3.5rem)] flex-col items-center justify-center px-6 py-12">
+        <div className="w-full max-w-xl rounded-[26px] border border-border bg-card px-6 py-8 md:px-8 md:py-9">
           <div className="flex justify-center">
             <div className="relative flex h-24 w-24 items-center justify-center">
               <svg className="h-24 w-24 -rotate-90" viewBox="0 0 80 80">
@@ -163,7 +163,7 @@ export function BuildingScreen({
                   strokeWidth="3"
                 />
                 <circle
-                  className="stroke-[var(--accent)] transition-[stroke-dashoffset] duration-500"
+                  className="stroke-white transition-[stroke-dashoffset] duration-500"
                   cx="40"
                   cy="40"
                   fill="none"
@@ -183,7 +183,6 @@ export function BuildingScreen({
           </div>
 
           <div className="mt-8 text-center">
-            <div className="thin-label text-[var(--accent)]">Execution in progress</div>
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.06em] text-foreground md:text-[2.35rem]">
               Building your workspace
             </h1>

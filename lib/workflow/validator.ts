@@ -50,8 +50,8 @@ export function validateWorkflowSpec(spec: WorkflowSpec): ValidatedWorkflowSpec 
     company: [
       "basic_info",
       "headcount",
-      "funding_and_investment",
-      "job_openings",
+      "funding",
+      "hiring",
       "locations",
       "taxonomy",
     ],
