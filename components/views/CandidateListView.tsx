@@ -10,15 +10,18 @@ interface CandidateListViewProps {
 
 export function CandidateListView({ run }: CandidateListViewProps) {
   const candidates = run.records.map((record) => ({
-    name: record.inputKey,
+    name: String(record.derivedPayload?.name ?? record.inputKey),
     title: String(record.derivedPayload?.title ?? "Unknown"),
     company: String(record.derivedPayload?.company ?? "Unknown"),
-    score: String(record.derivedPayload?.score ?? "n/a"),
+    location: String(record.derivedPayload?.location ?? "Unknown"),
+    email: String(record.derivedPayload?.email ?? "n/a"),
     summary: String(record.derivedPayload?.summary ?? "Candidate profile ready for review."),
     source: record.sourceHint,
   }));
   const representedCompanies = new Set(candidates.map((candidate) => candidate.company));
   const representedTitles = new Set(candidates.map((candidate) => candidate.title));
+  const representedLocations = new Set(candidates.map((candidate) => candidate.location));
+  const contactCoverage = candidates.filter((candidate) => candidate.email !== "n/a").length;
 
   return (
     <div className="space-y-6 p-6 md:p-8">
@@ -44,37 +47,52 @@ export function CandidateListView({ run }: CandidateListViewProps) {
         />
         <MetricCard
           icon={<Layers3 className="h-4 w-4" />}
-          label="Titles"
-          value={representedTitles.size}
+          label="Locations"
+          value={representedLocations.size}
         />
         <MetricCard
           icon={<Sparkles className="h-4 w-4" />}
-          label="Signals"
-          value={
-            run.derivedInsights.highlights.length +
-            run.derivedInsights.recommendations.length
-          }
+          label="Contacts"
+          value={contactCoverage}
         />
       </div>
 
       <SectionCard
-        description="Profiles surfaced by the run, using live records instead of the placeholder demo cards."
+        description="Profiles surfaced by the run, now showing live role, company, location, and contact context."
         title="Top Candidates"
       >
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {candidates.slice(0, 6).map((candidate) => (
             <EntityCard
               key={`${candidate.name}-${candidate.company}`}
-              badge={candidate.score}
+              badge={candidate.email !== "n/a" ? "contact" : undefined}
               description={candidate.summary}
               fields={[
                 { label: "Company", value: candidate.company },
                 { label: "Role", value: candidate.title },
+                { label: "Location", value: candidate.location },
+                { label: "Email", value: candidate.email },
               ]}
-              tags={dedupeTags([candidate.company, candidate.source, candidate.title])}
+              tags={dedupeTags([candidate.company, candidate.location, candidate.source, candidate.title])}
               subtitle={candidate.title}
               title={candidate.name}
             />
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        description="The current title mix in the returned shortlist."
+        title="Role Coverage"
+      >
+        <div className="grid gap-3 lg:grid-cols-2">
+          {[...representedTitles].slice(0, 6).map((title) => (
+            <div
+              key={title}
+              className="rounded-[16px] border border-border bg-[#111111] px-4 py-4 text-sm leading-7 text-foreground"
+            >
+              {title}
+            </div>
           ))}
         </div>
       </SectionCard>
@@ -83,5 +101,5 @@ export function CandidateListView({ run }: CandidateListViewProps) {
 }
 
 function dedupeTags(tags: string[]) {
-  return [...new Set(tags.filter(Boolean))].slice(0, 3);
+  return [...new Set(tags.filter(Boolean).filter((tag) => tag !== "Unknown"))].slice(0, 4);
 }

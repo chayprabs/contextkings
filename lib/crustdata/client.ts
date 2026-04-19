@@ -2,6 +2,7 @@ import type { FilterCondition, FilterGroup, ValidatedWorkflowSpec } from "@/lib/
 
 const BASE_URL = "https://api.crustdata.com";
 const COMPANY_SCREENER_FIELDS = [
+  "crustdata_company_id",
   "company_name",
   "company_website",
   "company_website_domain",
@@ -61,6 +62,7 @@ export class CrustDataClient {
       (value) => !isDomain(value) && !isCompanyProfileUrl(value) && !isNumericId(value),
     );
     const responses: unknown[] = [];
+    const fallbackResponses: unknown[] = [];
 
     if (crustdataCompanyIds.length > 0) {
       responses.push(
@@ -76,7 +78,51 @@ export class CrustDataClient {
         company_domain: domains.join(","),
         fields: COMPANY_SCREENER_FIELDS.join(","),
       });
-      responses.push(filterExactCompanyMatches(payload, domains));
+      const exactMatches = filterExactCompanyMatches(payload, domains);
+      fallbackResponses.push(exactMatches);
+
+      const resolvedCompanyIds = dedupe(
+        exactMatches
+          .map((row) => resolveCompanyId(row))
+          .filter((value): value is string => Boolean(value)),
+      )
+        .filter((value) => !crustdataCompanyIds.some((candidate) => String(candidate) === value))
+        .map((value) => Number(value));
+      const resolvedProfileUrls = dedupe(
+        exactMatches
+          .map((row) => firstString(row.linkedin_profile_url, asRecord(row.basic_info)?.professional_network_url))
+          .filter((value): value is string => Boolean(value)),
+      ).filter((value) => !profileUrls.includes(value));
+      const resolvedNames = dedupe(
+        exactMatches
+          .map((row) => firstString(row.company_name, asRecord(row.basic_info)?.name))
+          .filter((value): value is string => Boolean(value)),
+      ).filter((value) => !names.includes(value));
+
+      if (resolvedCompanyIds.length > 0) {
+        responses.push(
+          await this.post("/company/enrich", {
+            crustdata_company_ids: resolvedCompanyIds,
+            fields: COMPANY_ENRICH_FIELDS,
+          }),
+        );
+      }
+
+      if (resolvedProfileUrls.length > 0) {
+        responses.push(
+          await this.post("/company/enrich", {
+            professional_network_profile_urls: resolvedProfileUrls,
+            fields: COMPANY_ENRICH_FIELDS,
+          }),
+        );
+      } else if (resolvedCompanyIds.length === 0 && resolvedNames.length > 0) {
+        responses.push(
+          await this.post("/company/enrich", {
+            names: resolvedNames,
+            fields: COMPANY_ENRICH_FIELDS,
+          }),
+        );
+      }
     }
 
     if (profileUrls.length > 0) {
@@ -97,7 +143,12 @@ export class CrustDataClient {
       );
     }
 
-    return mergePayloads(responses);
+    const enriched = mergePayloads(responses);
+    if (enriched.length > 0) {
+      return enriched;
+    }
+
+    return mergePayloads(fallbackResponses);
   }
 
   async enrichPeople(spec: ValidatedWorkflowSpec) {
@@ -312,7 +363,17 @@ function dedupe(values: string[]) {
 }
 
 function mergePayloads(payloads: unknown[]) {
-  return payloads.flatMap(extractPayloadRows);
+  const rows = payloads.flatMap(extractPayloadRows);
+  const deduped = new Map<string, Record<string, unknown>>();
+
+  for (const row of rows) {
+    const key = resolvePayloadRowKey(row);
+    if (!key || !deduped.has(key)) {
+      deduped.set(key ?? `row-${deduped.size}`, row);
+    }
+  }
+
+  return [...deduped.values()];
 }
 
 function filterExactCompanyMatches(payload: unknown, requestedDomains: string[]) {
@@ -404,6 +465,10 @@ function firstString(...values: unknown[]) {
     if (typeof value === "string") {
       return value;
     }
+
+    if (typeof value === "number") {
+      return String(value);
+    }
   }
 
   return null;
@@ -419,6 +484,16 @@ function isNumericId(value: string) {
 
 function isCompanyProfileUrl(value: string) {
   return value.includes("linkedin.com/company");
+}
+
+function resolveCompanyId(row: Record<string, unknown>) {
+  const value = firstString(
+    row.crustdata_company_id,
+    asRecord(row.company_data)?.crustdata_company_id,
+    asRecord(row.basic_info)?.crustdata_company_id,
+  );
+
+  return value && /^\d+$/.test(value) ? value : null;
 }
 
 function resolveRequestedDomain(
@@ -468,6 +543,22 @@ function isRootWebsiteForDomain(value: string | null, requestedDomain: string) {
   } catch {
     return false;
   }
+}
+
+function resolvePayloadRowKey(row: Record<string, unknown>) {
+  return firstString(
+    resolveCompanyId(row),
+    row.person_id,
+    row.matched_on,
+    row.company_website_domain,
+    row.professional_network_profile_url,
+    row.linkedin_profile_url,
+    firstString(asRecord(row.basic_info)?.primary_domain, asRecord(row.basic_info)?.domain),
+    firstString(asRecord(row.company_data)?.company_website_domain),
+    firstString(asRecord(row.basic_profile)?.linkedin_profile_url),
+    row.business_email,
+    row.work_email,
+  );
 }
 
 function serializeFilters(filter: FilterCondition | FilterGroup): unknown {

@@ -136,7 +136,6 @@ export function buildPlanAssistantMessage(
   workflow: ValidatedWorkflowSpec,
   steps: WorkflowStep[],
 ) {
-  const filterSteps = steps.filter((step) => step.type === "filter");
   const assistantNote = selectAssistantNote(workflow);
   const normalizedAssistantNote = assistantNote?.replace(/[.!?\s]+$/, "");
   const warnings =
@@ -149,17 +148,15 @@ export function buildPlanAssistantMessage(
   const assumptionSuffix = normalizedAssistantNote
     ? ` I also noted ${normalizedAssistantNote.charAt(0).toLowerCase()}${normalizedAssistantNote.slice(1)}.`
     : "";
-  const filterSuffix =
-    filterSteps.length > 1
-      ? ` I split the filter phase into ${filterSteps.length} focused steps so stage and fit can be handled separately.`
+  const flow = steps.map((step) => step.label).join(" -> ");
+  const filters = flattenFilters(workflow.inputs.filters);
+  const filterSummary =
+    filters.length > 0
+      ? ` The run will honor ${summarizeConditions(filters)}.`
       : "";
+  const outputSummary = ` The final ${workflow.uiIntent.replaceAll("-", " ")} will emphasize ${buildOutputFieldSummary(workflow)}.`;
 
-  return `${intro} a ${steps.length}-step ${describeWorkflowShape(workflow)} workflow. We will start with ${steps[0]?.label.toLowerCase() ?? "the source step"}, then move through ${steps
-    .slice(1, -1)
-    .map((step) => step.label.toLowerCase())
-    .join(", ")}, and finish with ${steps.at(-1)?.label.toLowerCase() ?? "the final output"}.${
-    assumptionSuffix
-  }${filterSuffix}${warnings}`;
+  return `${intro} a ${steps.length}-step ${describeWorkflowShape(workflow)} workflow for ${workflow.goal.trim()}. Flow: ${flow}.${filterSummary}${outputSummary}${assumptionSuffix}${warnings}`;
 }
 
 export function detectViewType(
@@ -182,7 +179,6 @@ export function detectViewType(
 
   if (
     allText.includes("candidate") ||
-    allText.includes("profile") ||
     allText.includes("linkedin") ||
     goalText.includes("candidate") ||
     goalText.includes("linkedin")
@@ -335,7 +331,10 @@ function buildFilterSteps(
   steps.push({
     id: `filter-${currentStepCount + steps.length + 1}`,
     type: "filter",
-    label: workflow.entityType === "person" ? "Qualification gate" : "Stage qualification",
+    label: buildFocusedFilterLabel(
+      workflow.entityType === "person" ? "Qualification gate" : "Stage qualification",
+      stage,
+    ),
     description:
       stage.length > 0
         ? `Gate the shortlist using ${summarizeConditions(stage)} before enrichment.`
@@ -346,7 +345,10 @@ function buildFilterSteps(
   steps.push({
     id: `filter-${currentStepCount + steps.length + 1}`,
     type: "filter",
-    label: workflow.entityType === "person" ? "Role-fit filter" : "ICP fit filter",
+    label: buildFocusedFilterLabel(
+      workflow.entityType === "person" ? "Role-fit filter" : "ICP fit filter",
+      fit,
+    ),
     description:
       fit.length > 0
         ? `Keep only records that match ${summarizeConditions(fit)}.`
@@ -358,7 +360,7 @@ function buildFilterSteps(
     steps.push({
       id: `filter-${currentStepCount + steps.length + 1}`,
       type: "filter",
-      label: "Shortlist guardrails",
+      label: buildFocusedFilterLabel("Shortlist guardrails", guardrails),
       description: `Apply the remaining guardrails for ${summarizeConditions(guardrails)}.`,
       confirmed: true,
     });
@@ -382,29 +384,58 @@ function isGeneratedMarker(value: string) {
 function buildSourceLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   switch (workflow.inputMode) {
     case "csv":
-      return "CSV bootstrap source";
+      return workflow.entityType === "person"
+        ? "Bootstrap from CSV candidate data"
+        : "Bootstrap from CSV company data";
     case "company-search":
-      return "CrustData company search";
+      return buildSearchFocus(workflow) ?? "Search target companies";
     case "person-search":
-      return "CrustData people search";
+      return buildSearchFocus(workflow) ?? "Search target people";
     case "web-search":
       return "Web search + fetch";
     default:
-      return workflow.entityType === "person"
-        ? "Known profiles + emails"
-        : "Known companies + domains";
+      if (workflow.entityType === "person") {
+        return containsProfileIdentifiers(workflow.inputs.identifiers)
+          ? "Use provided profiles + emails"
+          : "Use provided people identifiers";
+      }
+
+      return containsDomainIdentifiers(workflow.inputs.identifiers)
+        ? "Use provided company domains"
+        : "Use provided company identifiers";
   }
 }
 
 function buildSourceDescription(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
+  const exampleInputs = summarizeInputExamples(workflow);
+
   if (workflow.sourceHints.length > 0) {
-    return `Start from ${workflow.sourceHints.join(", ")} and normalize it into a supported input adapter.`;
+    return exampleInputs
+      ? `Start from ${workflow.sourceHints.join(", ")} using ${exampleInputs} and normalize it into a supported input adapter.`
+      : `Start from ${workflow.sourceHints.join(", ")} and normalize it into a supported input adapter.`;
   }
 
-  return "Normalize the request into a supported CrustData-compatible input source.";
+  if (workflow.inputMode === "company-search" || workflow.inputMode === "person-search") {
+    const filters = flattenFilters(workflow.inputs.filters);
+    return filters.length > 0
+      ? `Query CrustData with ${summarizeConditions(filters)} before moving to enrichment.`
+      : "Query CrustData using the prompt intent before moving to enrichment.";
+  }
+
+  return exampleInputs
+    ? `Normalize ${exampleInputs} into a supported CrustData-compatible input source.`
+    : "Normalize the request into a supported CrustData-compatible input source.";
 }
 
 function buildFilterLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
+  const filters = flattenFilters(workflow.inputs.filters);
+  if (filters.length > 0) {
+    const summaryLabel = summarizeFilterHeading(filters);
+    if (summaryLabel) {
+      return summaryLabel;
+    }
+  }
+
   if (workflow.entityType === "person") {
     return "Candidate filters";
   }
@@ -418,7 +449,7 @@ function buildFilterLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
 
 function buildFilterDescription(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   if (workflow.inputs.filters) {
-    return "Apply the requested criteria before enrichment so the shortlist stays focused.";
+    return `Apply ${summarizeConditions(flattenFilters(workflow.inputs.filters))} before enrichment so the shortlist stays focused.`;
   }
 
   return "Narrow the source records to the most relevant entities before enrichment.";
@@ -426,26 +457,26 @@ function buildFilterDescription(workflow: WorkflowSpec | ValidatedWorkflowSpec) 
 
 function buildEnrichLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   return workflow.entityType === "person"
-    ? "Enrich candidate profiles"
-    : "Enrich company records";
+    ? "Enrich role, company, and contact context"
+    : "Enrich company firmographics";
 }
 
 function buildEnrichDescription(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   return workflow.entityType === "person"
-    ? "Add profile, experience, and contact context to each shortlisted person."
-    : "Add taxonomy, headcount, funding, and business context to each shortlisted company.";
+    ? "Add name, current title, current company, location, experience, and contact fields to each shortlisted person."
+    : "Add company name, domain, HQ, taxonomy, headcount, funding, hiring, and profile links to each shortlisted company.";
 }
 
 function buildAnalyzeLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   switch (workflow.llmTask) {
     case "score":
       return workflow.entityType === "person"
-        ? "Score candidates"
-        : "Score prospects";
+        ? "Score candidates for fit"
+        : "Score companies for fit";
     case "rank":
       return workflow.entityType === "person"
-        ? "Rank candidates"
-        : "Rank companies";
+        ? "Rank the candidate shortlist"
+        : "Rank the company shortlist";
     case "classify":
       return "Classify records";
     case "cluster":
@@ -462,19 +493,29 @@ function buildAnalyzeLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
 }
 
 function buildAnalyzeDescription(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
-  return `Run the ${workflow.llmTask.replaceAll("-", " ")} step so the output is decision-ready.`;
+  return workflow.entityType === "person"
+    ? `Use title, company, location, and experience data to ${workflow.llmTask.replaceAll("-", " ")} the shortlist.`
+    : `Use company, HQ, industry, funding, hiring, and headcount data to ${workflow.llmTask.replaceAll("-", " ")} the shortlist.`;
 }
 
 function buildOutputLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
   switch (workflow.uiIntent) {
     case "comparison-view":
-      return "Side-by-side comparison";
+      return workflow.entityType === "person"
+        ? "Side-by-side candidate comparison"
+        : "Side-by-side company comparison";
     case "cards-first":
-      return "Card workspace";
+      return workflow.entityType === "person"
+        ? "Candidate cards"
+        : "Company cards";
     case "report":
-      return "Report view";
+      return workflow.entityType === "person"
+        ? "Candidate report"
+        : "Company report";
     case "table-first":
-      return "Dashboard + table";
+      return workflow.entityType === "person"
+        ? "Candidate dashboard + table"
+        : "Company dashboard + table";
     case "list":
       return workflow.entityType === "person"
         ? "Candidate shortlist"
@@ -485,7 +526,7 @@ function buildOutputLabel(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
 }
 
 function buildOutputDescription(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
-  return `Render the final ${workflow.uiIntent.replaceAll("-", " ")} with the derived records and summary insights.`;
+  return `Render the final ${workflow.uiIntent.replaceAll("-", " ")} with ${buildOutputFieldSummary(workflow)} and the summary insights.`;
 }
 
 function describeWorkflowShape(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
@@ -558,6 +599,153 @@ function summarizeConditions(conditions: FilterCondition[]) {
   return conditions
     .map((condition) => describeCondition(condition))
     .join(", ");
+}
+
+function buildSearchFocus(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
+  const filters = flattenFilters(workflow.inputs.filters);
+  const industry = filters.find((condition) => condition.field.toLowerCase().includes("industry"));
+  const geography = filters.find(
+    (condition) =>
+      condition.field.toLowerCase().includes("country") ||
+      condition.field.toLowerCase().includes("location"),
+  );
+  const title = filters.find((condition) => condition.field.toLowerCase().includes("title"));
+  const stage = filters.find((condition) => condition.field.toLowerCase().includes("funding"));
+  const base =
+    workflow.entityType === "person"
+      ? title
+        ? `Search ${describeConditionValue(title)} people`
+        : "Search target people"
+      : industry
+        ? `Search ${describeConditionValue(industry)} companies`
+        : "Search target companies";
+  const suffix = [
+    geography ? `in ${describeConditionValue(geography)}` : null,
+    stage ? `at ${describeConditionValue(stage)}` : null,
+  ].filter(Boolean);
+
+  return suffix.length > 0 ? `${base} ${suffix.join(" ")}` : base;
+}
+
+function summarizeInputExamples(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
+  const candidates = [
+    ...workflow.inputs.identifiers,
+    ...workflow.inputs.manualEntries,
+  ]
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates.join(", ");
+}
+
+function containsDomainIdentifiers(values: string[]) {
+  return values.some((value) => /\b[a-z0-9.-]+\.[a-z]{2,}\b/i.test(value));
+}
+
+function containsProfileIdentifiers(values: string[]) {
+  return values.some((value) => value.includes("linkedin.com/") || value.includes("@"));
+}
+
+function summarizeFilterHeading(conditions: FilterCondition[]) {
+  const stage = conditions.filter((condition) => isStageFilter(condition.field));
+  const fit = conditions.filter((condition) => isFitFilter(condition.field));
+
+  if (stage.length > 0 && fit.length > 0) {
+    return "Stage and fit filters";
+  }
+
+  if (stage.length > 0) {
+    return buildFocusedFilterLabel("Stage filters", stage);
+  }
+
+  if (fit.length > 0) {
+    return buildFocusedFilterLabel("Fit filters", fit);
+  }
+
+  return null;
+}
+
+function buildFocusedFilterLabel(base: string, conditions: FilterCondition[]) {
+  if (conditions.length === 0) {
+    return base;
+  }
+
+  const focus = conditions
+    .slice(0, 2)
+    .map((condition) => describeConditionFocus(condition))
+    .filter(Boolean)
+    .join(", ");
+
+  return focus ? `${base}: ${focus}` : base;
+}
+
+function describeConditionFocus(condition: FilterCondition) {
+  const field = condition.field.toLowerCase();
+
+  if (
+    field.includes("industry") ||
+    field.includes("country") ||
+    field.includes("location") ||
+    field.includes("title") ||
+    field.includes("funding")
+  ) {
+    return describeConditionValue(condition);
+  }
+
+  if (field.includes("headcount")) {
+    return `team ${describeConditionValue(condition)}`;
+  }
+
+  if (field.includes("hiring") || field.includes("job_openings")) {
+    return "active hiring";
+  }
+
+  return null;
+}
+
+function describeConditionValue(condition: FilterCondition) {
+  if (Array.isArray(condition.value)) {
+    return condition.value.join("/");
+  }
+
+  return String(condition.value);
+}
+
+function buildOutputFieldSummary(workflow: WorkflowSpec | ValidatedWorkflowSpec) {
+  if (workflow.entityType === "person") {
+    return "candidate name, current title, current company, location, contact coverage, and fit signals";
+  }
+
+  if (workflow.uiIntent === "comparison-view") {
+    return "company name, HQ, industry, funding stage, hiring activity, and headcount side by side";
+  }
+
+  return "company name, domain, HQ, industry, funding stage, hiring activity, headcount, and research notes";
+}
+
+function isStageFilter(field: string) {
+  const normalized = field.toLowerCase();
+  return (
+    normalized.includes("funding") ||
+    normalized.includes("headcount") ||
+    normalized.includes("job_openings") ||
+    normalized.includes("hiring")
+  );
+}
+
+function isFitFilter(field: string) {
+  const normalized = field.toLowerCase();
+  return (
+    normalized.includes("industry") ||
+    normalized.includes("country") ||
+    normalized.includes("location") ||
+    normalized.includes("title") ||
+    normalized.includes("skill")
+  );
 }
 
 function describeCondition(condition: FilterCondition) {

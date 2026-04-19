@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPlanStepsToWorkflow,
+  buildPlanAssistantMessage,
   createExecutionBlockerMessage,
   detectViewType,
   syncWorkflowPlanSteps,
@@ -107,9 +108,12 @@ describe("plan mode helpers", () => {
     const filterSteps = steps.filter((step) => step.type === "filter");
 
     expect(filterSteps.length).toBeGreaterThan(1);
-    expect(filterSteps.map((step) => step.label)).toEqual(
-      expect.arrayContaining(["Stage qualification", "ICP fit filter"]),
-    );
+    expect(
+      filterSteps.some((step) => step.label.startsWith("Stage qualification")),
+    ).toBe(true);
+    expect(
+      filterSteps.some((step) => step.label.startsWith("ICP fit filter")),
+    ).toBe(true);
   });
 
   it("removes the analyze step when the follow-up asks to delete the research step", () => {
@@ -128,5 +132,21 @@ describe("plan mode helpers", () => {
     );
 
     expect(steps.some((step) => step.type === "analyze")).toBe(false);
+  });
+
+  it("writes a prompt-specific assistant summary instead of a generic workflow blurb", () => {
+    const workflow = validateWorkflowSpec(
+      heuristicWorkflowFromPrompt(
+        "Build a report on fintech companies in India and show company name, HQ, funding stage, and hiring activity",
+        createThreadStateSnapshot(),
+        null,
+      ),
+    );
+
+    const message = buildPlanAssistantMessage(workflow, workflowToPlanSteps(workflow));
+
+    expect(message).toContain("fintech companies in India");
+    expect(message).toContain("funding stage");
+    expect(message).toContain("hiring activity");
   });
 });

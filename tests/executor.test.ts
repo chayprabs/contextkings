@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { isNonEmptySpec, validateSpec } from "@json-render/core";
 import { runWorkflow } from "@/lib/workflow/executor";
 import { createThreadStateSnapshot, type ValidatedWorkflowSpec } from "@/lib/workflow/schema";
 
@@ -122,8 +123,14 @@ describe("runWorkflow", () => {
     expect(run.counts.enriched).toBe(1);
     expect(run.records.map((record) => record.inputKey)).toEqual(["101"]);
     expect(run.records[0]?.derivedPayload).toMatchObject({
-      summary: "A",
+      name: "A",
       hqCountry: "India",
+      fundingStage: "Series A",
+      hiring: "4",
     });
+    expect(isNonEmptySpec(run.uiModel)).toBe(true);
+    expect(validateSpec(run.uiModel as Parameters<typeof validateSpec>[0]).valid).toBe(
+      true,
+    );
   });
 });

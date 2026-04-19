@@ -10,20 +10,30 @@ interface ComparisonViewProps {
 
 export function ComparisonView({ run }: ComparisonViewProps) {
   const compared = run.records.slice(0, 3).map((record) => ({
-    name: record.inputKey,
-    category: String(
+    name: String(record.derivedPayload?.name ?? record.inputKey),
+    industry: String(
       record.derivedPayload?.industry ?? record.derivedPayload?.company ?? "Unknown",
     ),
-    signal: String(
-      record.derivedPayload?.headcount ?? record.derivedPayload?.title ?? "n/a",
+    headquarters: String(
+      record.derivedPayload?.hq ?? record.derivedPayload?.location ?? "Unknown",
     ),
-    score: String(record.derivedPayload?.score ?? "n/a"),
+    fundingStage: String(
+      record.derivedPayload?.fundingStage ?? record.derivedPayload?.title ?? "Unknown",
+    ),
+    hiringOrEmail: String(
+      record.derivedPayload?.hiring ?? record.derivedPayload?.email ?? "n/a",
+    ),
+    headcountOrCompany: String(
+      record.derivedPayload?.headcount ?? record.derivedPayload?.company ?? "n/a",
+    ),
   }));
-  const categories = new Set(compared.map((record) => record.category));
+  const categories = new Set(compared.map((record) => record.industry));
   const matrixRows = [
-    ["Category", ...compared.map((record) => record.category)],
-    ["Signal", ...compared.map((record) => record.signal)],
-    ["Score", ...compared.map((record) => record.score)],
+    ["Industry / Company", ...compared.map((record) => record.industry)],
+    ["HQ / Location", ...compared.map((record) => record.headquarters)],
+    ["Funding Stage / Title", ...compared.map((record) => record.fundingStage)],
+    ["Hiring / Contact", ...compared.map((record) => record.hiringOrEmail)],
+    ["Headcount / Company", ...compared.map((record) => record.headcountOrCompany)],
   ];
   const takeaways = run.derivedInsights.highlights
     .concat(run.derivedInsights.recommendations)
@@ -64,7 +74,7 @@ export function ComparisonView({ run }: ComparisonViewProps) {
       </div>
 
       <SectionCard
-        description="The side-by-side comparison view from the workflow output."
+        description="A side-by-side view of the actual returned company or candidate records."
         title="Comparison Matrix"
       >
         <RecordTable
@@ -74,7 +84,7 @@ export function ComparisonView({ run }: ComparisonViewProps) {
       </SectionCard>
 
       <SectionCard
-        description="Plain-language takeaways distilled from the comparison run."
+        description="Plain-language takeaways distilled from the current comparison run."
         title="Takeaways"
       >
         <div className="grid gap-3 lg:grid-cols-2">

@@ -20,9 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
-import { CandidateListView } from "@/components/views/CandidateListView";
-import { CompanyResearchView } from "@/components/views/CompanyResearchView";
-import { ComparisonView } from "@/components/views/ComparisonView";
+import { RunDashboardCanvas } from "@/components/RunDashboardCanvas";
 import { exportRunAsCsv, exportRunAsJson } from "@/lib/persistence/repository";
 import type { ExecutionResponse, WorkflowStep } from "@/lib/plan-mode";
 
@@ -40,7 +38,7 @@ export function ResultsScreen(props: ResultsScreenProps) {
   const [refineInput, setRefineInput] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [lastRefine, setLastRefine] = useState("");
-  const { run, metadata, viewType } = result;
+  const { run, metadata } = result;
   const suggestedTitle = run.derivedInsights.title || `Saved run ${new Date().toLocaleTimeString()}`;
 
   async function handleShare() {
@@ -164,13 +162,9 @@ export function ResultsScreen(props: ResultsScreenProps) {
       ) : null}
 
       <div className="relative flex-1 overflow-auto pb-28">
-        {viewType === "candidate-list" ? (
-          <CandidateListView run={run} />
-        ) : viewType === "comparison" ? (
-          <ComparisonView run={run} />
-        ) : (
-          <CompanyResearchView run={run} />
-        )}
+        <div className="app-frame px-6 py-6 md:px-8">
+          <RunDashboardCanvas run={run} />
+        </div>
       </div>
 
       <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 flex justify-center px-6 pb-5">

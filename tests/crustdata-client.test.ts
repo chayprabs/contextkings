@@ -153,4 +153,76 @@ describe("CrustDataClient", () => {
       },
     ]);
   });
+
+  it("resolves domains through the company screener and then enriches the matched company ids", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            companies: [
+              {
+                crustdata_company_id: 631466,
+                company_name: "OpenAI",
+                company_website: "https://openai.com/",
+                company_website_domain: "openai.com",
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              matched_on: "631466",
+              matches: [
+                {
+                  confidence_score: 1,
+                  company_data: {
+                    basic_info: { name: "OpenAI", primary_domain: "openai.com" },
+                  },
+                },
+              ],
+            },
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new CrustDataClient("test-key");
+    const response = await client.enrichCompanies({
+      ...baseSpec,
+      inputMode: "manual-list",
+      inputs: {
+        ...baseSpec.inputs,
+        identifiers: ["openai.com"],
+      },
+    });
+
+    const [secondUrl, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const secondPayload = JSON.parse(String(secondInit.body)) as {
+      crustdata_company_ids: number[];
+    };
+
+    expect(secondUrl).toContain("/company/enrich");
+    expect(secondPayload.crustdata_company_ids).toEqual([631466]);
+    expect(response).toEqual([
+      {
+        confidence_score: 1,
+        matched_on: "631466",
+        company_data: {
+          basic_info: { name: "OpenAI", primary_domain: "openai.com" },
+        },
+      },
+    ]);
+  });
 });

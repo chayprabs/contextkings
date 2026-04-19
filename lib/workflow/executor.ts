@@ -180,7 +180,7 @@ function normalizeCompanies(payload: unknown): RecordEnvelope[] {
     const hiring =
       asRecord(companyData.job_openings) ?? asRecord(companyData.hiring);
     const locations = asRecord(companyData.locations);
-    const summary = firstString(
+    const name = firstString(
       basicInfo?.name,
       companyData.company_name,
       basicInfo?.primary_domain,
@@ -194,52 +194,95 @@ function normalizeCompanies(payload: unknown): RecordEnvelope[] {
       taxonomy?.professional_network_industries,
       basicInfo?.industries,
     ) ?? "Unknown";
-    const headcountValue = firstString(
+    const domain = firstString(
+      basicInfo?.primary_domain,
+      basicInfo?.domain,
+      companyData.company_website_domain,
+      companyData.domain,
+    );
+    const website = firstString(
+      basicInfo?.company_website,
+      basicInfo?.website,
+      companyData.company_website,
+    );
+    const linkedinUrl = firstString(
+      basicInfo?.professional_network_url,
+      companyData.linkedin_profile_url,
+    );
+    const headcountValue = firstNumber(
       headcount?.total,
       headcount?.linkedin_headcount,
       companyData.employee_count_range,
-    ) ?? "n/a";
+    );
+    const fundingValue = firstNumber(
+      funding?.total_investment_usd,
+      funding?.crunchbase_total_investment_usd,
+      companyData.total_investment_usd,
+    );
+    const fundingStage = firstString(
+      funding?.last_round_type,
+      funding?.last_funding_round_type,
+      funding?.crunchbase_last_funding_round_type,
+      companyData.last_round_type,
+      companyData.last_funding_round_type,
+    ) ?? "Unknown";
+    const hiringValue = firstNumber(
+      hiring?.openings_count,
+      hiring?.job_openings_count,
+    );
+    const headquarters =
+      firstString(
+        locations?.headquarters,
+        companyData.headquarters,
+        companyData.hq_location,
+      ) ?? buildHeadquartersLabel(companyData);
+    const hqCountry =
+      firstString(
+        locations?.hq_country,
+        companyData.hq_country,
+        locations?.largest_headcount_country,
+        companyData.largest_headcount_country,
+        inferCountryFromHeadquarters(locations?.headquarters),
+      ) ?? "Unknown";
+
     return {
       entityType: "company",
       inputKey:
         String(
           entry.matched_on ??
-            basicInfo?.primary_domain ??
-            basicInfo?.domain ??
-            companyData.company_website_domain ??
-            basicInfo?.professional_network_url ??
-            companyData.linkedin_profile_url ??
-            basicInfo?.name ??
-            companyData.company_name ??
+            domain ??
+            linkedinUrl ??
+            name ??
             companyData.crustdata_company_id ??
             "company",
         ),
-      sourceHint: "company-enrich",
+      sourceHint: entry.company_data ? "company-enrich" : "company-search",
       rawSourceJson: null,
       crustPayload: companyData,
       derivedPayload: {
-        summary,
+        name,
+        summary: buildCompanyRecordSummary({
+          name,
+          industry,
+          headquarters,
+          hqCountry,
+          fundingStage,
+          hiringValue,
+          headcountValue,
+        }),
+        domain: domain ?? "n/a",
+        website: website ?? "n/a",
+        linkedinUrl: linkedinUrl ?? "n/a",
         industry,
-        headcount: String(headcountValue),
-        funding:
-          firstString(
-            funding?.total_investment_usd,
-            funding?.crunchbase_total_investment_usd,
-            companyData.total_investment_usd,
-          ) ?? "n/a",
-        hiring:
-          firstString(
-            hiring?.openings_count,
-            hiring?.job_openings_count,
-          ) ?? "n/a",
-        hqCountry:
-          firstString(
-            locations?.hq_country,
-            companyData.hq_country,
-            locations?.largest_headcount_country,
-            companyData.largest_headcount_country,
-            inferCountryFromHeadquarters(locations?.headquarters),
-          ) ?? "Unknown",
+        headcount: headcountValue == null ? "n/a" : formatWholeNumber(headcountValue),
+        headcountValue: headcountValue ?? undefined,
+        funding: fundingValue == null ? "n/a" : formatUsd(fundingValue),
+        fundingValue: fundingValue ?? undefined,
+        fundingStage,
+        hiring: hiringValue == null ? "n/a" : String(hiringValue),
+        hiringValue: hiringValue ?? undefined,
+        hq: headquarters ?? hqCountry,
+        hqCountry,
       },
     };
   });
@@ -252,22 +295,69 @@ function normalizePeople(payload: unknown): RecordEnvelope[] {
     const experience = asRecord(personData.experience);
     const employmentDetails = asRecord(experience?.employment_details);
     const current = asRecord(employmentDetails?.current);
+    const contact = asRecord(personData.contact);
+    const name = firstString(
+      basicProfile?.name,
+      personData.name,
+      entry.matched_on,
+    ) ?? "Person";
+    const company = firstString(
+      current?.company_name,
+      current?.name,
+      personData.company_name,
+    ) ?? "Unknown";
+    const title = firstString(
+      current?.title,
+      basicProfile?.headline,
+      personData.title,
+    ) ?? "Unknown";
+    const location =
+      firstString(
+        basicProfile?.location,
+        current?.location,
+        contact?.city,
+      ) ?? buildPersonLocation(personData, basicProfile, current, contact);
+    const email = firstString(
+      personData.business_email,
+      personData.work_email,
+      contact?.business_email,
+      contact?.work_email,
+    );
+    const linkedinUrl = firstString(
+      personData.professional_network_profile_url,
+      personData.linkedin_profile_url,
+      basicProfile?.linkedin_profile_url,
+    );
+    const headline = firstString(basicProfile?.headline, personData.headline);
+
     return {
       entityType: "person",
       inputKey:
         String(
           entry.matched_on ??
-            basicProfile?.name ??
-            personData.professional_network_profile_url ??
+            linkedinUrl ??
+            email ??
+            name ??
             "person",
         ),
-      sourceHint: "person-enrich",
+      sourceHint: entry.person_data ? "person-enrich" : "person-search",
       rawSourceJson: null,
       crustPayload: personData,
       derivedPayload: {
-        summary: String(basicProfile?.name ?? personData.name ?? "Person"),
-        company: String(current?.company_name ?? current?.name ?? "Unknown"),
-        title: String(current?.title ?? basicProfile?.headline ?? "Unknown"),
+        name,
+        summary: buildPersonRecordSummary({
+          name,
+          title,
+          company,
+          location,
+          email,
+        }),
+        company,
+        title,
+        location: location ?? "Unknown",
+        email: email ?? "n/a",
+        linkedinUrl: linkedinUrl ?? "n/a",
+        headline: headline ?? "n/a",
       },
     };
   });
@@ -275,58 +365,63 @@ function normalizePeople(payload: unknown): RecordEnvelope[] {
 
 function deriveInsights(records: RecordEnvelope[], spec: ValidatedWorkflowSpec) {
   const title = summarizeGoal(spec.goal, spec.entityType);
-  const titleBase =
-    spec.entityType === "person"
-      ? "candidate"
-      : spec.entityType === "company"
-        ? "company"
-        : "workflow";
-
-  const highlights = records
-    .slice(0, 4)
-    .map((record) => `${record.inputKey}: ${record.derivedPayload?.summary ?? "Enriched"}`);
-  const recommendations = [
-    `Refine the ${titleBase} shortlist with more specific filters in chat.`,
-    "Export the current run or ask for a different UI shape such as a report or table-first view.",
-  ];
   const segments = buildSegments(records, spec);
 
   return {
     title,
     summary:
       records.length > 0
-        ? `Completed a ${spec.inputMode.replaceAll("-", " ")} workflow and prepared ${records.length} enriched records for ${spec.llmTask.replaceAll("-", " ")}.`
+        ? spec.entityType === "person"
+          ? buildPersonRunSummary(records, spec)
+          : buildCompanyRunSummary(records, spec)
         : `Prepared the workflow structure, but no records were available after execution.`,
-    highlights,
-    recommendations,
+    highlights:
+      spec.entityType === "person"
+        ? buildPersonHighlights(records)
+        : buildCompanyHighlights(records),
+    recommendations: buildRecommendations(records, spec),
     segments,
   };
 }
 
 function buildSegments(records: RecordEnvelope[], spec: ValidatedWorkflowSpec) {
-  if (spec.entityType === "company") {
-    const buckets = countBy(records, (record) => String(record.derivedPayload?.industry ?? "Unknown"));
-    return Object.entries(buckets)
-      .slice(0, 5)
-      .map(([label, value]) => ({
-        label,
-        value: String(value),
-        description: "company records",
-      }));
+  const candidates =
+    spec.entityType === "person"
+      ? [
+          { key: "company", description: "profiles by current company" },
+          { key: "title", description: "profiles by current title" },
+          { key: "location", description: "profiles by location" },
+        ]
+      : [
+          { key: "hqCountry", description: "companies by headquarters country" },
+          { key: "industry", description: "companies by industry" },
+          { key: "fundingStage", description: "companies by funding stage" },
+        ];
+  const selected = candidates
+    .map((candidate) => ({
+      ...candidate,
+      buckets: collectDerivedValueBuckets(records, candidate.key),
+    }))
+    .find((candidate) => Object.keys(candidate.buckets).length > 1)
+    ?? candidates
+      .map((candidate) => ({
+        ...candidate,
+        buckets: collectDerivedValueBuckets(records, candidate.key),
+      }))
+      .find((candidate) => Object.keys(candidate.buckets).length > 0);
+
+  if (!selected) {
+    return [];
   }
 
-  if (spec.entityType === "person") {
-    const buckets = countBy(records, (record) => String(record.derivedPayload?.company ?? "Unknown"));
-    return Object.entries(buckets)
-      .slice(0, 5)
-      .map(([label, value]) => ({
-        label,
-        value: String(value),
-        description: "profiles",
-      }));
-  }
-
-  return [];
+  return Object.entries(selected.buckets)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([label, value]) => ({
+      label,
+      value: String(value),
+      description: selected.description,
+    }));
 }
 
 function buildMockRecords(spec: ValidatedWorkflowSpec, threadState: ThreadState): RecordEnvelope[] {
@@ -337,51 +432,411 @@ function buildMockRecords(spec: ValidatedWorkflowSpec, threadState: ThreadState)
         ? spec.inputs.manualEntries
         : threadState.sourceContext?.records.flatMap((row) => Object.values(row)).slice(0, spec.inputs.limit) ?? [];
 
-  const base = seedValues.length > 0 ? seedValues : Array.from({ length: spec.inputs.limit }, (_, index) => `${spec.entityType}-${index + 1}`);
+  const base = seedValues.length > 0
+    ? seedValues
+    : Array.from({ length: spec.inputs.limit }, (_, index) => `${spec.entityType}-${index + 1}`);
 
-  return base.slice(0, spec.inputs.limit).map((value, index) => ({
-    entityType: spec.entityType === "mixed" ? "company" : spec.entityType,
-    inputKey: value,
-    sourceHint: spec.sourceHints[0] ?? "mock-source",
-    rawSourceJson: null,
-    crustPayload:
-      spec.entityType === "person"
-        ? {
-            basic_profile: { name: titleize(value) },
-            experience: {
-              employment_details: {
-                current: {
-                  company_name: `Company ${index + 1}`,
-                  title: index % 2 === 0 ? "Senior Growth Lead" : "Head of Revenue",
-                },
+  if (spec.entityType === "person") {
+    return normalizePeople(
+      base.slice(0, spec.inputs.limit).map((value, index) => ({
+        matched_on: value,
+        person_data: {
+          basic_profile: {
+            name: buildMockPersonName(value, index),
+            headline: index % 2 === 0 ? "Senior Growth Lead" : "Head of Revenue",
+            location: index % 2 === 0 ? "Bengaluru, India" : "San Francisco, USA",
+          },
+          professional_network_profile_url: `https://www.linkedin.com/in/mock-person-${index + 1}`,
+          business_email: `mock-person-${index + 1}@example.com`,
+          experience: {
+            employment_details: {
+              current: {
+                company_name: `Company ${index + 1}`,
+                title: index % 2 === 0 ? "Senior Growth Lead" : "Head of Revenue",
               },
             },
-          }
-        : {
-            basic_info: {
-              name: titleize(value.replace(/^https?:\/\//, "")),
-              domain: value.includes(".") ? value : `sample${index + 1}.com`,
-            },
-            taxonomy: {
-              professional_network_industry: index % 2 === 0 ? "Software" : "Financial Services",
-            },
-            headcount: { total: 50 + index * 25 },
           },
-    derivedPayload:
-      spec.entityType === "person"
-        ? {
-            summary: titleize(value),
-            company: `Company ${index + 1}`,
-            title: index % 2 === 0 ? "Senior Growth Lead" : "Head of Revenue",
-            score: `${90 - index * 4}/100`,
-          }
-        : {
-            summary: titleize(value),
-            industry: index % 2 === 0 ? "Software" : "Financial Services",
-            headcount: String(50 + index * 25),
-            score: `${95 - index * 4}/100`,
-          },
+        },
+      })),
+    ).map((record) => ({
+      ...record,
+      sourceHint: spec.sourceHints[0] ?? "mock-source",
+    }));
+  }
+
+  return normalizeCompanies(
+    base.slice(0, spec.inputs.limit).map((value, index) => ({
+      matched_on: value,
+      company_data: {
+        basic_info: {
+          name: buildMockCompanyName(value, index),
+          primary_domain: value.includes(".") ? value : `sample${index + 1}.com`,
+          professional_network_url: `https://www.linkedin.com/company/mock-company-${index + 1}`,
+        },
+        taxonomy: {
+          professional_network_industry: index % 2 === 0 ? "Software" : "Financial Services",
+        },
+        headcount: { total: 50 + index * 25 },
+        funding: {
+          total_investment_usd: 2_000_000 + index * 1_250_000,
+          last_round_type: index % 3 === 0 ? "Seed" : index % 3 === 1 ? "Series A" : "Series B",
+        },
+        hiring: { openings_count: 2 + index * 2 },
+        locations: {
+          headquarters: index % 2 === 0 ? "Bengaluru, Karnataka, India" : "New York, New York, USA",
+          hq_country: index % 2 === 0 ? "India" : "USA",
+        },
+      },
+    })),
+  ).map((record) => ({
+    ...record,
+    sourceHint: spec.sourceHints[0] ?? "mock-source",
   }));
+}
+
+function buildCompanyRecordSummary(input: {
+  name: string;
+  industry: string;
+  headquarters: string | null;
+  hqCountry: string;
+  fundingStage: string;
+  hiringValue: number | null;
+  headcountValue: number | null;
+}) {
+  const parts = [
+    input.industry !== "Unknown" ? input.industry : null,
+    input.headquarters ?? (input.hqCountry !== "Unknown" ? input.hqCountry : null),
+    input.fundingStage !== "Unknown" ? input.fundingStage : null,
+    input.hiringValue && input.hiringValue > 0 ? `${input.hiringValue} open role${input.hiringValue === 1 ? "" : "s"}` : null,
+    input.headcountValue ? `${formatWholeNumber(input.headcountValue)} employees` : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? `${input.name} | ${parts.join(" | ")}` : input.name;
+}
+
+function buildPersonRecordSummary(input: {
+  name: string;
+  title: string;
+  company: string;
+  location: string | null;
+  email: string | null;
+}) {
+  const roleText =
+    input.title !== "Unknown" && input.company !== "Unknown"
+      ? `${input.title} at ${input.company}`
+      : input.title !== "Unknown"
+        ? input.title
+        : input.company !== "Unknown"
+          ? input.company
+          : null;
+  const parts = [
+    roleText,
+    input.location,
+    input.email ? "contact available" : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? `${input.name} | ${parts.join(" | ")}` : input.name;
+}
+
+function buildCompanyRunSummary(records: RecordEnvelope[], spec: ValidatedWorkflowSpec) {
+  const industries = topDerivedLabels(records, "industry", 2);
+  const countries = topDerivedLabels(records, "hqCountry", 2);
+  const hiringCount = records.filter((record) => readDerivedNumber(record, "hiringValue", "hiring") > 0).length;
+  const fundingStageCount = records.filter((record) => hasMeaningfulDerivedValue(record, "fundingStage")).length;
+  const parts = [
+    `Prepared ${records.length} company record${records.length === 1 ? "" : "s"} for ${spec.llmTask.replaceAll("-", " ")}.`,
+    industries.length > 0 ? `Coverage is strongest in ${joinLabels(industries)}.` : null,
+    countries.length > 0 ? `HQ concentration is ${joinLabels(countries)}.` : null,
+    hiringCount > 0
+      ? `${hiringCount} compan${hiringCount === 1 ? "y" : "ies"} show open-role activity.`
+      : fundingStageCount > 0
+        ? `${fundingStageCount} compan${fundingStageCount === 1 ? "y" : "ies"} include funding-stage data.`
+        : null,
+  ].filter(Boolean);
+
+  return parts.join(" ");
+}
+
+function buildPersonRunSummary(records: RecordEnvelope[], spec: ValidatedWorkflowSpec) {
+  const titles = topDerivedLabels(records, "title", 2);
+  const companies = topDerivedLabels(records, "company", 2);
+  const locations = topDerivedLabels(records, "location", 2);
+  const contactCount = records.filter((record) => hasMeaningfulDerivedValue(record, "email")).length;
+  const parts = [
+    `Prepared ${records.length} candidate record${records.length === 1 ? "" : "s"} for ${spec.llmTask.replaceAll("-", " ")}.`,
+    titles.length > 0 ? `The strongest role coverage is ${joinLabels(titles)}.` : null,
+    companies.length > 0 ? `Current-company coverage is ${joinLabels(companies)}.` : null,
+    locations.length > 0 ? `Location coverage is ${joinLabels(locations)}.` : null,
+    contactCount > 0 ? `${contactCount} profile${contactCount === 1 ? "" : "s"} include direct contact fields.` : null,
+  ].filter(Boolean);
+
+  return parts.join(" ");
+}
+
+function buildCompanyHighlights(records: RecordEnvelope[]) {
+  return [...records]
+    .sort((left, right) => companyPriorityScore(right) - companyPriorityScore(left))
+    .slice(0, 4)
+    .map((record) => {
+      const name = readDerivedText(record, "name") ?? record.inputKey;
+      const details = [
+        readDerivedText(record, "industry"),
+        readDerivedText(record, "hqCountry") ?? readDerivedText(record, "hq"),
+        normalizeDerivedText(readDerivedText(record, "fundingStage")),
+        readDerivedNumber(record, "hiringValue", "hiring") > 0
+          ? `${readDerivedNumber(record, "hiringValue", "hiring")} openings`
+          : null,
+        normalizeDerivedText(readDerivedText(record, "headcount")),
+      ].filter(Boolean);
+
+      return details.length > 0 ? `${name} | ${details.join(" | ")}` : name;
+    });
+}
+
+function buildPersonHighlights(records: RecordEnvelope[]) {
+  return [...records]
+    .sort((left, right) => personPriorityScore(right) - personPriorityScore(left))
+    .slice(0, 4)
+    .map((record) => {
+      const name = readDerivedText(record, "name") ?? record.inputKey;
+      const title = normalizeDerivedText(readDerivedText(record, "title"));
+      const company = normalizeDerivedText(readDerivedText(record, "company"));
+      const location = normalizeDerivedText(readDerivedText(record, "location"));
+      const email = hasMeaningfulDerivedValue(record, "email") ? "contact available" : null;
+      const role = title && company ? `${title} at ${company}` : title ?? company;
+      const details = [role, location, email].filter(Boolean);
+
+      return details.length > 0 ? `${name} | ${details.join(" | ")}` : name;
+    });
+}
+
+function buildRecommendations(records: RecordEnvelope[], spec: ValidatedWorkflowSpec) {
+  const recommendations: string[] = [];
+
+  if (records.length === spec.inputs.limit) {
+    recommendations.push(
+      `The current limit returned ${records.length} records. Increase the limit if you want a broader shortlist.`,
+    );
+  }
+
+  if (spec.entityType === "person") {
+    const missingLocationCount = records.filter((record) => !hasMeaningfulDerivedValue(record, "location")).length;
+    const contactCount = records.filter((record) => hasMeaningfulDerivedValue(record, "email")).length;
+
+    if (contactCount === 0) {
+      recommendations.push("No profiles exposed direct contact fields. Use profile URLs or business emails when outreach data matters.");
+    } else if (missingLocationCount > 0) {
+      recommendations.push(`${missingLocationCount} profile${missingLocationCount === 1 ? "" : "s"} are missing clear location data. Add location filters if geography is critical.`);
+    }
+  } else {
+    const missingHqCount = records.filter((record) => !hasMeaningfulDerivedValue(record, "hqCountry")).length;
+    const topCountry = topDerivedLabels(records, "hqCountry", 1)[0];
+
+    if (topCountry && distinctDerivedValueCount(records, "hqCountry") > 1) {
+      recommendations.push(`Add or tighten an HQ-country filter if you want to focus the list around ${topCountry}.`);
+    }
+
+    if (missingHqCount > 0) {
+      recommendations.push(`${missingHqCount} compan${missingHqCount === 1 ? "y is" : "ies are"} missing clear HQ metadata. Direct domains usually return better location coverage.`);
+    }
+  }
+
+  recommendations.push("Export the current records or refine the workflow with a narrower brief if you want a more opinionated report.");
+  return recommendations.slice(0, 3);
+}
+
+function collectDerivedValueBuckets(records: RecordEnvelope[], key: string) {
+  const buckets: Record<string, number> = {};
+
+  for (const record of records) {
+    const value = normalizeDerivedText(readDerivedText(record, key));
+    if (!value) {
+      continue;
+    }
+
+    buckets[value] = (buckets[value] ?? 0) + 1;
+  }
+
+  return buckets;
+}
+
+function topDerivedLabels(records: RecordEnvelope[], key: string, limit: number) {
+  return Object.entries(collectDerivedValueBuckets(records, key))
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, limit)
+    .map(([label]) => label);
+}
+
+function distinctDerivedValueCount(records: RecordEnvelope[], key: string) {
+  return topDerivedLabels(records, key, records.length).length;
+}
+
+function joinLabels(labels: string[]) {
+  if (labels.length <= 1) {
+    return labels[0] ?? "";
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
+}
+
+function readDerivedText(record: RecordEnvelope, key: string) {
+  const derived = asRecord(record.derivedPayload);
+  return derived ? firstString(derived[key]) : null;
+}
+
+function normalizeDerivedText(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return !normalized || normalized === "n/a" || normalized === "Unknown"
+    ? null
+    : normalized;
+}
+
+function hasMeaningfulDerivedValue(record: RecordEnvelope, key: string) {
+  return Boolean(normalizeDerivedText(readDerivedText(record, key)));
+}
+
+function readDerivedNumber(record: RecordEnvelope, numericKey: string, fallbackKey?: string) {
+  const derived = asRecord(record.derivedPayload);
+  const numeric = derived ? toNumber(derived[numericKey]) : null;
+  if (numeric != null) {
+    return numeric;
+  }
+
+  return fallbackKey && derived ? toNumber(derived[fallbackKey]) ?? 0 : 0;
+}
+
+function companyPriorityScore(record: RecordEnvelope) {
+  return (
+    readDerivedNumber(record, "hiringValue", "hiring") * 1000 +
+    readDerivedNumber(record, "fundingValue", "funding") +
+    readDerivedNumber(record, "headcountValue", "headcount")
+  );
+}
+
+function personPriorityScore(record: RecordEnvelope) {
+  const title = (readDerivedText(record, "title") ?? "").toLowerCase();
+  const seniorityBonus =
+    title.includes("head") || title.includes("director") || title.includes("lead")
+      ? 200
+      : title.includes("senior") || title.includes("staff")
+        ? 120
+        : 40;
+
+  return seniorityBonus + (hasMeaningfulDerivedValue(record, "email") ? 80 : 0);
+}
+
+function buildHeadquartersLabel(companyData: UnknownRecord) {
+  const city = firstString(companyData.hq_city);
+  const region = firstString(companyData.hq_region, companyData.hq_state);
+  const country = firstString(companyData.hq_country);
+  return [city, region, country].filter(Boolean).join(", ") || null;
+}
+
+function buildPersonLocation(
+  personData: UnknownRecord,
+  basicProfile: UnknownRecord | null,
+  current: UnknownRecord | null,
+  contact: UnknownRecord | null,
+) {
+  const direct = firstString(
+    personData.location,
+    basicProfile?.city,
+    current?.location_city,
+    contact?.location,
+  );
+  if (direct) {
+    return direct;
+  }
+
+  const city = firstString(basicProfile?.city, current?.city, contact?.city);
+  const region = firstString(basicProfile?.state, current?.state, contact?.state);
+  const country = firstString(basicProfile?.country, current?.country, contact?.country);
+
+  return [city, region, country].filter(Boolean).join(", ") || null;
+}
+
+function buildMockCompanyName(value: string, index: number) {
+  const normalized = value.replace(/^https?:\/\//, "").split(/[/.]/)[0];
+  return titleize(normalized || `company ${index + 1}`);
+}
+
+function buildMockPersonName(value: string, index: number) {
+  const emailName = value.includes("@") ? value.split("@")[0] : value;
+  return titleize(emailName || `person ${index + 1}`);
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const parsed = toNumber(value);
+      if (parsed != null) {
+        return parsed;
+      }
+
+       const rangedMatch = value.match(/-?\d[\d,]*/);
+       if (rangedMatch) {
+         const rangedValue = toNumber(rangedMatch[0]);
+         if (rangedValue != null) {
+           return rangedValue;
+         }
+       }
+    }
+  }
+
+  return null;
+}
+
+function formatUsd(value: number) {
+  if (value >= 1_000_000_000) {
+    return `$${(value / 1_000_000_000).toFixed(1)}B`;
+  }
+
+  if (value >= 1_000_000) {
+    return `$${(value / 1_000_000).toFixed(1)}M`;
+  }
+
+  if (value >= 1_000) {
+    return `$${(value / 1_000).toFixed(1)}K`;
+  }
+
+  return `$${Math.round(value)}`;
+}
+
+function formatWholeNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function dedupeRecords(records: RecordEnvelope[]) {
+  const deduped = new Map<string, RecordEnvelope>();
+
+  for (const record of records) {
+    const key =
+      readDerivedText(record, "linkedinUrl") ??
+      readDerivedText(record, "domain") ??
+      readDerivedText(record, "email") ??
+      readDerivedText(record, "name") ??
+      record.inputKey;
+
+    if (!deduped.has(key)) {
+      deduped.set(key, record);
+    }
+  }
+
+  return [...deduped.values()];
 }
 
 function normalizeArray(payload: unknown) {
@@ -441,7 +896,7 @@ function expandedSearchLimit(spec: ValidatedWorkflowSpec) {
 }
 
 function finalizeRecords(records: RecordEnvelope[], spec: ValidatedWorkflowSpec) {
-  return applyLocalFilters(records, spec.inputs.filters).slice(0, spec.inputs.limit);
+  return dedupeRecords(applyLocalFilters(records, spec.inputs.filters)).slice(0, spec.inputs.limit);
 }
 
 function applyLocalFilters(
@@ -665,14 +1120,6 @@ function inferCountryFromHeadquarters(value: unknown) {
     .filter(Boolean);
 
   return segments.at(-1) ?? null;
-}
-
-function countBy<T>(items: T[], getKey: (item: T) => string) {
-  return items.reduce<Record<string, number>>((accumulator, item) => {
-    const key = getKey(item);
-    accumulator[key] = (accumulator[key] ?? 0) + 1;
-    return accumulator;
-  }, {});
 }
 
 function titleize(value: string) {

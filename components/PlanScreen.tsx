@@ -53,33 +53,32 @@ interface PlanScreenProps {
 }
 
 const STARTER_PROMPTS: Array<{
-  description: string;
   icon: LucideIcon;
-  label: string;
+  title: string;
   prompt: string;
 }> = [
   {
-    label: "Research B2B SaaS companies",
-    description: "Series A-B, enterprise software",
-    prompt: "Research B2B SaaS companies",
+    title: "Find Series A SaaS Accounts",
+    prompt:
+      "Build a prospecting workflow for B2B SaaS companies in the US and UK that raised Series A or Series B in the last 18 months, sell into finance or operations teams, and have roughly 50 to 500 employees. Return a ranked list with company name, funding details, hiring signals, likely buyer team, and a short reason each account is a strong outbound target.",
     icon: Database,
   },
   {
-    label: "Scout engineering candidates",
-    description: "Senior+, distributed systems",
-    prompt: "Scout engineering candidates",
+    title: "Source Senior Backend Talent",
+    prompt:
+      "Create a recruiting workflow to find senior backend engineers with 6 or more years of experience in distributed systems, data infrastructure, or developer platforms at fast-growing product companies. Prioritize candidates in India, Singapore, and remote-friendly markets, and return profiles with current role, location, notable systems work, tenure stability, and why each person fits a staff-level backend search.",
     icon: Users,
   },
   {
-    label: "Compare 3 competitors",
-    description: "Side-by-side market analysis",
-    prompt: "Compare 3 competitors",
+    title: "Compare AI SDR Vendors",
+    prompt:
+      "Compare three AI SDR or outbound automation vendors for a B2B SaaS team evaluating new tooling this quarter. Build a side-by-side brief covering ICP, messaging claims, pricing model, integrations, standout features, proof points, weaknesses, and a crisp summary of where each vendor is strongest or weakest.",
     icon: BarChart3,
   },
   {
-    label: "Monitor funding rounds",
-    description: "Track recent raises in fintech",
-    prompt: "Monitor funding rounds",
+    title: "Track Fintech Buying Signals",
+    prompt:
+      "Set up a monitoring workflow for fintech companies that announced funding, executive hires, or international expansion in the last 30 days. Focus on companies likely to add sales tooling or data vendors soon, and output the signal type, timing, key context, and recommended outreach angle for each account.",
     icon: Layers,
   },
 ];
@@ -382,8 +381,8 @@ export function PlanScreen({
                 const Icon = starter.icon;
                 return (
                   <button
-                    key={starter.label}
-                    className="rounded-[22px] border border-border bg-card px-5 py-5 text-left transition hover:border-white/30 hover:bg-[#101010]"
+                    key={starter.title}
+                    className="flex min-h-[164px] flex-col rounded-[22px] border border-border bg-card px-5 py-5 text-left transition hover:border-white/30 hover:bg-[#101010]"
                     onClick={() => {
                       void submitPrompt(starter.prompt);
                     }}
@@ -391,10 +390,17 @@ export function PlanScreen({
                   >
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                       <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span>{starter.label}</span>
+                      <span>{starter.title}</span>
                     </div>
-                    <div className="mt-3 text-sm text-muted-foreground">
-                      {starter.description}
+                    <div
+                      className="mt-3 overflow-hidden text-sm leading-6 text-muted-foreground"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 3,
+                      }}
+                    >
+                      {starter.prompt}
                     </div>
                   </button>
                 );
