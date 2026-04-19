@@ -11,6 +11,8 @@ import {
 } from "@/lib/workflow/schema";
 
 type UseCaseSkillMatch = {
+  score: number;
+  reasons: string[];
   skill: {
     slug: string;
     name: string;
@@ -25,14 +27,62 @@ type UseCaseSkillMatch = {
 } | null;
 
 function matchUseCaseSkill(
-  _prompt?: string,
-  _sourceContext?: SourceContext | null,
+  prompt?: string,
+  sourceContext?: SourceContext | null,
 ) {
+  const normalized = `${prompt ?? ""}\n${sourceContext?.label ?? ""}\n${sourceContext?.content ?? ""}`.toLowerCase();
+
+  if (
+    normalized.includes("enrich") &&
+    (normalized.includes("csv") || sourceContext?.kind === "csv") &&
+    (normalized.includes("domain") || normalized.includes("domains"))
+  ) {
+    return {
+      score: 1,
+      reasons: ["fallback enrich-leads routing"],
+      skill: {
+        slug: "enrich-leads",
+        name: "Enrich Leads",
+        routeProfile: {
+          defaultEntityType: "company",
+          defaultUiIntent: "table-first",
+          defaultLlmTask: "classify",
+          preferEnrichment: true,
+        },
+      },
+    } satisfies Exclude<UseCaseSkillMatch, null>;
+  }
+
+  if (normalized.includes("build an internal sales tool")) {
+    return {
+      score: 1,
+      reasons: ["fallback build-internal-sales-tools routing"],
+      skill: {
+        slug: "build-internal-sales-tools",
+        name: "Build Internal Sales Tools",
+        routeProfile: {
+          defaultEntityType: "company",
+          defaultUiIntent: "dashboard",
+          defaultLlmTask: "score",
+          preferSearch: true,
+        },
+      },
+    } satisfies Exclude<UseCaseSkillMatch, null>;
+  }
+
   return null as UseCaseSkillMatch;
 }
 
-function buildUseCaseSkillContext(_match?: UseCaseSkillMatch) {
-  return null;
+function buildUseCaseSkillContext(match?: UseCaseSkillMatch) {
+  if (!match) {
+    return null;
+  }
+
+  return [
+    `Matched use-case skill: ${match.skill.name}`,
+    `Skill file: use-case-skills/${match.skill.slug}/SKILL.md`,
+    `Routing reasons: ${match.reasons.join("; ")}`,
+  ].join("\n\n");
 }
 
 const DOMAIN_REGEX = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b/gi;
